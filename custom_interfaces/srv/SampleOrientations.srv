@@ -1,0 +1,6 @@
+int32 n
+float64 max_angle_x   # radians
+float64 max_angle_y   # radians
+float64 max_yaw    # radians
+---
+geometry_msgs/Quaternion[] orientations

@@ -1,0 +1,14 @@
+# Launch robot driver (SIM)
+ros2 launch ur_robot_driver ur_platform_control.launch.py ur_type:=ur5e robot_ip:=yyy.yyy.yyy.yyy use_fake_hardware:=true launch_rviz:=false initial_joint_controller:=joint_trajectory_controller
+
+# Launch moveit
+ros2 launch ur_moveit_config ur_platform_moveit.launch.py ur_type:=ur5e launch_rviz:=true
+
+# Launch positions sampler
+ros2 run reach_pkg pruning_positions_service
+
+# Launch orientation sampler
+ros2 run reach_pkg orientation_service
+
+# Pruning poses broadcaster
+ros2 run reach_pkg sample_poses
