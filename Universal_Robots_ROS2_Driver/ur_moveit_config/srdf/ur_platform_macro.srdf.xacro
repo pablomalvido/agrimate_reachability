@@ -46,6 +46,23 @@
       <joint name="${prefix}wrist_2_joint" value="-1.64" />
       <joint name="${prefix}wrist_3_joint" value="-1.7" />
     </group_state>
+    <group_state name="${prefix}test_extend2" group="${prefix}${name}_manipulator">
+      <joint name="${prefix}elbow_joint" value="1.942223" />
+      <joint name="${prefix}shoulder_lift_joint" value="2.703514" />
+      <joint name="${prefix}shoulder_pan_joint" value="3.672875" />
+      <joint name="${prefix}wrist_1_joint" value="-2.417994" />
+      <joint name="${prefix}wrist_2_joint" value="1.030396" />
+      <joint name="${prefix}wrist_3_joint" value="-1.180047" />
+    </group_state>
+    <group_state name="${prefix}start_config" group="${prefix}${name}_manipulator">
+      <joint name="${prefix}elbow_joint" value="1.93" />
+      <joint name="${prefix}shoulder_lift_joint" value="-1.35" />
+      <joint name="${prefix}shoulder_pan_joint" value="0.0" />
+      <joint name="${prefix}wrist_1_joint" value="-2.96" />
+      <joint name="${prefix}wrist_2_joint" value="-1.75" />
+      <joint name="${prefix}wrist_3_joint" value="-1.6" />
+    </group_state>
+
     <!--END EFFECTOR - Purpose - Represent information about an end effector.-->
     <!--VIRTUAL JOINT - Purpose - this element defines a virtual joint between a robot link and an external frame of reference (considered fixed with respect to the robot)-->
     <!--DISABLE COLLISIONS - By default it is assumed that any link of the robot could potentially come into collision with any other link in the robot. This tag disables collision checking between a specified pair of links. -->
@@ -62,6 +79,8 @@
     <disable_collisions link1="${prefix}wrist_2_link" link2="${prefix}wrist_3_link" reason="Adjacent" />
     <disable_collisions link1="${prefix}base_link" link2="${prefix}mount_cylinder" reason="Adjacent" />
     <disable_collisions link1="${prefix}base_link_inertia" link2="${prefix}mount_cylinder" reason="Adjacent" />
+    <disable_collisions link1="${prefix}platform_link" link2="${prefix}mount_cylinder" reason="Adjacent" />
+    <disable_collisions link1="${prefix}platform_link" link2="${prefix}ground_plane" reason="Adjacent" />
 
   </xacro:macro>
 </robot>

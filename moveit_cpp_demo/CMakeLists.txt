@@ -10,6 +10,10 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(moveit_ros_planning_interface REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(custom_interfaces REQUIRED)
+find_package(shape_msgs REQUIRED)
+find_package(moveit_msgs REQUIRED)
+find_package(moveit_ros_planning_interface REQUIRED)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
@@ -24,14 +28,52 @@ if(BUILD_TESTING)
 endif()
 
 add_executable(move_robot src/move_robot.cpp)
+add_executable(ik_checker src/reachability_ik_checker_v3.cpp)
+add_executable(ik_test src/ik_test.cpp)
+add_executable(collisions_server src/collisions_server.cpp)
+add_executable(ik_collisions src/ik_collisions_v2.cpp)
 
-ament_target_dependencies(move_robot
+
+ament_target_dependencies(move_robot 
   rclcpp
   moveit_ros_planning_interface
   geometry_msgs
 )
 
-install(TARGETS move_robot
+ament_target_dependencies(ik_checker 
+  rclcpp
+  moveit_core
+  moveit_ros_planning
+  moveit_ros_planning_interface
+  geometry_msgs
+  tf2_ros
+  tf2_geometry_msgs
+)
+
+ament_target_dependencies(ik_test 
+  rclcpp
+  moveit_ros_planning_interface
+  geometry_msgs
+)
+
+ament_target_dependencies(collisions_server 
+  rclcpp
+  moveit_ros_planning_interface
+  geometry_msgs
+  moveit_msgs
+  shape_msgs
+  custom_interfaces
+)
+
+ament_target_dependencies(ik_collisions 
+  rclcpp
+  moveit_ros_planning_interface
+  geometry_msgs
+  moveit_msgs
+  shape_msgs
+)
+
+install(TARGETS move_robot ik_checker ik_test collisions_server ik_collisions
   DESTINATION lib/${PROJECT_NAME}
 )
 

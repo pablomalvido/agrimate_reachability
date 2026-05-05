@@ -45,6 +45,8 @@ from launch.substitutions import (
     LaunchConfiguration,
     PathJoinSubstitution,
 )
+from ament_index_python.packages import get_package_share_directory
+import os
 
 
 def launch_setup(context, *args, **kwargs):
@@ -158,6 +160,14 @@ def launch_setup(context, *args, **kwargs):
     robot_description_kinematics = PathJoinSubstitution(
         [FindPackageShare(moveit_config_package), "config", "kinematics.yaml"]
     )
+
+    # robot_description_kinematics = {
+    #     "robot_description_kinematics": load_yaml(
+    #         str(moveit_config_package.perform(context)),
+    #         "config/kinematics.yaml"
+    #     )
+    # }
+
 
     robot_description_planning = {
         "robot_description_planning": load_yaml(

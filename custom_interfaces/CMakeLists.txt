@@ -30,6 +30,8 @@ endif()
 rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/SamplePoints.srv"
   "srv/SampleOrientations.srv"
+  "srv/AddBox.srv"
+  "srv/RemoveBox.srv"
   DEPENDENCIES geometry_msgs
 )
 

@@ -43,7 +43,7 @@ class SamplePoseTFBroadcaster(Node):
     # =========================
     def request_samples(self):
 
-        n = 50
+        n = 100
 
         # Points request
         req_p = SamplePoints.Request()
