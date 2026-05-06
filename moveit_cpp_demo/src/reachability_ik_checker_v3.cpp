@@ -15,6 +15,8 @@
 #include <geometry_msgs/msg/pose.hpp>
 #include <geometry_msgs/msg/transform_stamped.hpp>
 
+#include <Eigen/Dense>
+
 #include <memory>
 #include <string>
 #include <thread>
@@ -70,7 +72,7 @@ public:
     move_group_ = std::make_shared<moveit::planning_interface::MoveGroupInterface>(
       shared_from_this(), "ur_manipulator");
 
-    move_group_->setPlanningTime(1.0);
+    move_group_->setPlanningTime(0.6);
     move_group_->setNumPlanningAttempts(50);
 
 
@@ -109,6 +111,112 @@ public:
   }
 
 private:
+  struct IKMetrics
+  {
+    std::vector<double> joint_values;
+    std::vector<double> dist_to_limits;
+
+    double col_distance;
+    double manipulability;
+    double manip_world_y;
+    double manip_tool_neg_z;
+    double manip_world_y_fast;
+    double manip_tool_neg_z_fast;
+  };
+
+  IKMetrics computeMetrics()
+  {
+    IKMetrics m;
+
+    m.col_distance = col_distance_;
+
+    // =========================
+    // Joint values
+    // =========================
+    robot_state_->copyJointGroupPositions(joint_model_group_, m.joint_values);
+
+    // =========================
+    // Joint limits distance
+    // =========================
+    const auto& bounds = joint_model_group_->getActiveJointModels();
+
+    for (size_t i = 0; i < bounds.size(); ++i)
+    {
+      const auto& b = bounds[i]->getVariableBounds()[0];
+
+      double q = m.joint_values[i];
+      double d = std::min(q - b.min_position_, b.max_position_ - q);
+
+      m.dist_to_limits.push_back(d);
+    }
+
+    // =========================
+    // Jacobian
+    // =========================
+    Eigen::MatrixXd J;
+
+    robot_state_->getJacobian(
+      joint_model_group_,
+      robot_state_->getLinkModel(joint_model_group_->getLinkModelNames().back()),
+      Eigen::Vector3d::Zero(),
+      J
+    );
+
+    Eigen::MatrixXd JJt = J * J.transpose();
+
+    // =========================
+    // Yoshikawa
+    // =========================
+    m.manipulability = std::sqrt(JJt.determinant());
+
+    // =========================
+    // Directional manipulability
+    // =========================
+
+    // --- WORLD -Y
+    Eigen::VectorXd d_world = Eigen::VectorXd::Zero(6);
+    d_world(1) = 1.0; // +Y direction
+
+    m.manip_world_y =
+      1.0 / std::sqrt((d_world.transpose() * JJt.inverse() * d_world)(0,0));
+
+    //m.manip_world_y_fast = (J.transpose() * d_world).norm();
+
+    // --- TOOL -Z
+    Eigen::Isometry3d T =
+      robot_state_->getGlobalLinkTransform(
+        joint_model_group_->getLinkModelNames().back());
+
+    Eigen::Vector3d z_tool = T.rotation() * Eigen::Vector3d(0, 0, -1);
+
+    Eigen::VectorXd d_tool = Eigen::VectorXd::Zero(6);
+    d_tool.head<3>() = z_tool;
+
+    m.manip_tool_neg_z =
+      1.0 / std::sqrt((d_tool.transpose() * JJt.inverse() * d_tool)(0,0));
+
+    //m.manip_tool_neg_z_fast = (J.transpose() * d_tool).norm();
+
+    // Logs to verify correct execution
+    /*
+    RCLCPP_INFO(get_logger(),
+      "Robot model frame (Jacobian frame): %s",
+      robot_model_->getModelFrame().c_str());
+
+    RCLCPP_INFO(get_logger(),
+      "d_world Y: [%f, %f, %f, %f, %f, %f]",
+      d_world(0), d_world(1), d_world(2),
+      d_world(3), d_world(4), d_world(5));
+
+    RCLCPP_INFO(get_logger(),
+      "d_tool Z: [%f, %f, %f, %f, %f, %f]",
+      d_tool(0), d_tool(1), d_tool(2),
+      d_tool(3), d_tool(4), d_tool(5));
+    */
+
+    return m;
+  }
+
   bool planToIKSolution()
   {
     // Get IK solution from robot_state_
@@ -218,6 +326,7 @@ private:
       } 
     } else {
       RCLCPP_INFO(get_logger(), "Distance to collision: %f", res.distance);
+      col_distance_ = res.distance;
     }
 
     return !res.collision;
@@ -246,7 +355,7 @@ private:
       bool found_ik = robot_state_->setFromIK(
         joint_model_group_,
         pose,
-        0.05   // solver timeout
+        0.0   // solver timeout
       );
 
       if (!found_ik)
@@ -272,16 +381,19 @@ private:
 
   void checkReachability()
   {
+    auto t_start = std::chrono::high_resolution_clock::now();
     // printCollisionMatrix();
 
     std::random_device rd;
     std::mt19937 gen(rd());
-    std::bernoulli_distribution dist(0.3); // this percentage of poses will be evaluated for motion planning
+    std::bernoulli_distribution dist(0.2); // this percentage of poses will be evaluated for motion planning
 
     int ik_success_count = 0;
     int plan_success_count = 0;
     int plan_total_count = 0;
     int total = 100;
+
+    std::vector<IKMetrics> metrics_list_;
 
     RCLCPP_INFO(this->get_logger(), "Checking %d poses...", total);
 
@@ -321,6 +433,24 @@ private:
         ik_success_count++;
         RCLCPP_INFO(this->get_logger(), "IK success: %s", frame_name.c_str());
 
+        IKMetrics metrics = computeMetrics();
+        metrics_list_.push_back(metrics);
+
+        /*RCLCPP_INFO(this->get_logger(),
+          "Manipulability: %f | World -Y: %f | World -Y Fast: %f | Tool -Z: %f | Tool -Z Fast: %f",
+          metrics.manipulability,
+          metrics.manip_world_y,
+          metrics.manip_world_y_fast,
+          metrics.manip_tool_neg_z,
+          metrics.manip_tool_neg_z_fast);*/
+
+        RCLCPP_INFO(this->get_logger(),
+          "Manipulability: %f | World +Y: %f | Tool -Z: %f | Collision distance: %f",
+          metrics.manipulability,
+          metrics.manip_world_y,
+          metrics.manip_tool_neg_z,
+          metrics.col_distance);
+
         if (dist(gen))
         {
           plan_total_count++;
@@ -355,6 +485,16 @@ private:
       "IK success: %d / %d | Planning success: %d / %d",
       ik_success_count, total,
       plan_success_count, plan_total_count);
+
+    //RCLCPP_INFO(this->get_logger(), "Stored %zu IK metric samples", metrics_list_.size());
+
+    auto t_end = std::chrono::high_resolution_clock::now();
+
+    double total_time =
+      std::chrono::duration<double>(t_end - t_start).count();
+
+    RCLCPP_INFO(this->get_logger(),
+      "Total computation time: %.6f seconds", total_time);
   }
 
   // Members
@@ -365,6 +505,7 @@ private:
   std::shared_ptr<moveit::planning_interface::MoveGroupInterface> move_group_;
 
   std::string base_frame_;
+  double col_distance_;
 
   tf2_ros::Buffer tf_buffer_;
   tf2_ros::TransformListener tf_listener_;
