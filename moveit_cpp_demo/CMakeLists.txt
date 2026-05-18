@@ -14,6 +14,8 @@ find_package(custom_interfaces REQUIRED)
 find_package(shape_msgs REQUIRED)
 find_package(moveit_msgs REQUIRED)
 find_package(moveit_ros_planning_interface REQUIRED)
+find_package(ament_index_cpp REQUIRED)
+find_package(yaml-cpp REQUIRED)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
@@ -28,7 +30,7 @@ if(BUILD_TESTING)
 endif()
 
 add_executable(move_robot src/move_robot.cpp)
-add_executable(ik_checker src/reachability_ik_checker_v3.cpp)
+add_executable(ik_checker src/reachability_ik_checker_v4.cpp)
 add_executable(ik_test src/ik_test.cpp)
 add_executable(collisions_server src/collisions_server.cpp)
 add_executable(ik_collisions src/ik_collisions_v2.cpp)
@@ -48,6 +50,8 @@ ament_target_dependencies(ik_checker
   geometry_msgs
   tf2_ros
   tf2_geometry_msgs
+  ament_index_cpp
+  custom_interfaces
 )
 
 ament_target_dependencies(ik_test 
@@ -73,8 +77,15 @@ ament_target_dependencies(ik_collisions
   shape_msgs
 )
 
+target_link_libraries(ik_checker yaml-cpp)
+
 install(TARGETS move_robot ik_checker ik_test collisions_server ik_collisions
   DESTINATION lib/${PROJECT_NAME}
+)
+
+install(
+  DIRECTORY config
+  DESTINATION share/${PROJECT_NAME}
 )
 
 ament_package()

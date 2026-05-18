@@ -23,6 +23,11 @@
 #include <chrono>
 #include <random>
 
+#include <yaml-cpp/yaml.h>
+#include <fstream>
+#include <filesystem>
+#include <ament_index_cpp/get_package_share_directory.hpp>
+
 class IKReachabilityNode : public rclcpp::Node
 {
 public:
@@ -75,7 +80,7 @@ public:
     move_group_->setPlanningTime(0.6);
     move_group_->setNumPlanningAttempts(50);
 
-
+    normalization_loaded_ = loadNormalization();
     checkReachability();
   }
 
@@ -114,12 +119,17 @@ private:
   struct IKMetrics
   {
     std::vector<double> joint_values;
-    std::vector<double> dist_to_limits;
+    //std::vector<double> dist_to_limits;
 
+    double joint_centering_cost;
     double col_distance;
+    double col_distance_norm;
     double manipulability;
+    double manipulability_norm;
     double manip_world_y;
+    double manip_world_y_norm;
     double manip_tool_neg_z;
+    double manip_tool_neg_z_norm;
     double manip_world_y_fast;
     double manip_tool_neg_z_fast;
   };
@@ -128,27 +138,58 @@ private:
   {
     IKMetrics m;
 
-    m.col_distance = col_distance_;
+    // =========================
+    // Distance to collision cost
+    // =========================
+
+    //m.col_distance = col_distance_;
+
+    if (col_distance_ >= threshold_col)
+    {
+      m.col_distance_norm = 0.0;
+    }
+    else
+    {
+      double d = col_distance_;
+      m.col_distance_norm =
+        std::exp(-(d / (threshold_col - d)));
+    }
 
     // =========================
     // Joint values
     // =========================
-    robot_state_->copyJointGroupPositions(joint_model_group_, m.joint_values);
+    robot_state_->copyJointGroupPositions(
+      joint_model_group_,
+      m.joint_values);
 
-    // =========================
-    // Joint limits distance
-    // =========================
-    const auto& bounds = joint_model_group_->getActiveJointModels();
+    const auto& joints = joint_model_group_->getActiveJointModels();
 
-    for (size_t i = 0; i < bounds.size(); ++i)
+    double H = 0.0;
+
+    for (size_t i = 0; i < joints.size(); ++i)
     {
-      const auto& b = bounds[i]->getVariableBounds()[0];
+      const auto& b = joints[i]->getVariableBounds()[0];
 
       double q = m.joint_values[i];
-      double d = std::min(q - b.min_position_, b.max_position_ - q);
 
-      m.dist_to_limits.push_back(d);
+      double q_min = b.min_position_;
+      double q_max = b.max_position_;
+
+      double q_mid = 0.5 * (q_min + q_max);
+
+      // normalized joint position in [-1, 1]
+      double normalized =
+        2.0 * (q - q_mid) / (q_max - q_min);
+
+      // squared contribution
+      H += normalized * normalized;
     }
+
+    // normalize final metric to [0,1]
+    H /= static_cast<double>(joints.size());
+
+    // store result
+    m.joint_centering_cost = H;
 
     // =========================
     // Jacobian
@@ -167,7 +208,16 @@ private:
     // =========================
     // Yoshikawa
     // =========================
-    m.manipulability = std::sqrt(JJt.determinant());
+    double w_scaled = std::sqrt(JJt.determinant()) / std::pow(robot_length_, 3);
+
+    if (normalization_loaded_)
+    {
+      m.manipulability_norm = 1.0 - std::exp(-k_yosh_ * w_scaled);
+    }
+    else
+    {
+      m.manipulability = w_scaled;
+    }
 
     // =========================
     // Directional manipulability
@@ -176,11 +226,21 @@ private:
     // --- WORLD -Y
     Eigen::VectorXd d_world = Eigen::VectorXd::Zero(6);
     d_world(1) = 1.0; // +Y direction
+    //m.manip_world_y_fast = (J.transpose() * d_world).norm();
 
-    m.manip_world_y =
+    double manip_world_y =
       1.0 / std::sqrt((d_world.transpose() * JJt.inverse() * d_world)(0,0));
 
-    //m.manip_world_y_fast = (J.transpose() * d_world).norm();
+    double wwy_scaled = manip_world_y / robot_length_;
+
+    if (normalization_loaded_)
+    {
+      m.manip_world_y_norm = 1.0 - std::exp(-k_world_y_ * wwy_scaled);
+    }
+    else
+    {
+      m.manip_world_y = wwy_scaled;
+    }
 
     // --- TOOL -Z
     Eigen::Isometry3d T =
@@ -192,10 +252,21 @@ private:
     Eigen::VectorXd d_tool = Eigen::VectorXd::Zero(6);
     d_tool.head<3>() = z_tool;
 
-    m.manip_tool_neg_z =
+    //m.manip_tool_neg_z_fast = (J.transpose() * d_tool).norm();
+
+    double manip_tool_neg_z =
       1.0 / std::sqrt((d_tool.transpose() * JJt.inverse() * d_tool)(0,0));
 
-    //m.manip_tool_neg_z_fast = (J.transpose() * d_tool).norm();
+    double wtz_scaled = manip_tool_neg_z / robot_length_;
+
+    if (normalization_loaded_)
+    {
+      m.manip_tool_neg_z_norm = 1.0 - std::exp(-k_world_y_ * wtz_scaled);
+    }
+    else
+    {
+      m.manip_tool_neg_z = wtz_scaled;
+    }
 
     // Logs to verify correct execution
     /*
@@ -391,9 +462,7 @@ private:
     int ik_success_count = 0;
     int plan_success_count = 0;
     int plan_total_count = 0;
-    int total = 100;
-
-    std::vector<IKMetrics> metrics_list_;
+    int total = 50;
 
     RCLCPP_INFO(this->get_logger(), "Checking %d poses...", total);
 
@@ -445,11 +514,12 @@ private:
           metrics.manip_tool_neg_z_fast);*/
 
         RCLCPP_INFO(this->get_logger(),
-          "Manipulability: %f | World +Y: %f | Tool -Z: %f | Collision distance: %f",
+          "Manipulability: %f | World +Y: %f | Tool -Z: %f | Collision distance: %f | Centering cost: %f",
           metrics.manipulability,
           metrics.manip_world_y,
           metrics.manip_tool_neg_z,
-          metrics.col_distance);
+          metrics.col_distance_norm,
+          metrics.joint_centering_cost);
 
         if (dist(gen))
         {
@@ -481,6 +551,73 @@ private:
       removeBoxObstacle();
     }
 
+    if (!normalization_loaded_)
+    {
+      computeNormalizationConstants();
+      saveNormalization();
+      computeNormalizeMetrics();
+    }
+
+    //Logs summary
+    RCLCPP_INFO(get_logger(),
+      "========== METRICS LIST ==========");
+    for (size_t i = 0; i < metrics_list_.size(); ++i)
+    {
+      const auto& m = metrics_list_[i];
+
+      std::ostringstream joints_ss;
+
+      for (size_t j = 0; j < m.joint_values.size(); ++j)
+      {
+        joints_ss << m.joint_values[j];
+
+        if (j < m.joint_values.size() - 1)
+          joints_ss << ", ";
+      }
+
+      RCLCPP_INFO(get_logger(),
+        "Sample %zu", i);
+
+      RCLCPP_INFO(get_logger(),
+        "  Joint values: [%s]",
+        joints_ss.str().c_str());
+
+      RCLCPP_INFO(get_logger(),
+        "  Joint centering cost: %f",
+        m.joint_centering_cost);
+
+      RCLCPP_INFO(get_logger(),
+        "  Collision distance: %f",
+        m.col_distance_norm);
+
+      // RCLCPP_INFO(get_logger(),
+      //   "  Manipulability: %f",
+      //   m.manipulability);
+
+      RCLCPP_INFO(get_logger(),
+        "  Manipulability norm: %f",
+        m.manipulability_norm);
+
+      // RCLCPP_INFO(get_logger(),
+      //   "  Manip world +Y: %f",
+      //   m.manip_world_y);
+
+      RCLCPP_INFO(get_logger(),
+        "  Manip world +Y norm: %f",
+        m.manip_world_y_norm);
+
+      // RCLCPP_INFO(get_logger(),
+      //   "  Manip tool -Z: %f",
+      //   m.manip_tool_neg_z);
+
+      RCLCPP_INFO(get_logger(),
+        "  Manip tool -Z norm: %f",
+        m.manip_tool_neg_z_norm);
+
+      RCLCPP_INFO(get_logger(),
+        "-----------------------------------");
+    }
+
     RCLCPP_INFO(this->get_logger(),
       "IK success: %d / %d | Planning success: %d / %d",
       ik_success_count, total,
@@ -497,6 +634,109 @@ private:
       "Total computation time: %.6f seconds", total_time);
   }
 
+  void computeNormalizationConstants(){
+    if (metrics_list_.empty())
+    {
+      RCLCPP_WARN(get_logger(), "No metrics available for normalization");
+      return;
+    }
+
+    double sum_yosh = 0.0;
+    double sum_world_y = 0.0;
+    double sum_tool_z = 0.0;
+
+    for (const auto& m : metrics_list_)
+    {
+      sum_yosh += m.manipulability;
+      sum_world_y += m.manip_world_y;
+      sum_tool_z += m.manip_tool_neg_z;
+    }
+
+    double mean_yosh =
+      sum_yosh / static_cast<double>(metrics_list_.size());
+
+    double mean_world_y =
+      sum_world_y / static_cast<double>(metrics_list_.size());
+
+    double mean_tool_z =
+      sum_tool_z / static_cast<double>(metrics_list_.size());
+
+    // k = 1 / mean
+    k_yosh_ = 1.0 / mean_yosh;
+    k_world_y_ = 1.0 / mean_world_y;
+    k_tool_z_ = 1.0 / mean_tool_z;
+
+    RCLCPP_INFO(get_logger(),
+      "Computed normalization constants:");
+
+    RCLCPP_INFO(get_logger(),
+      "k_yosh    = %f", k_yosh_);
+
+    RCLCPP_INFO(get_logger(),
+      "k_world_y = %f", k_world_y_);
+
+    RCLCPP_INFO(get_logger(),
+      "k_tool_z  = %f", k_tool_z_);
+  }
+
+  void computeNormalizeMetrics(){
+    for (auto& m : metrics_list_)
+    {  
+      m.manipulability_norm =
+        1.0 - std::exp(
+          -k_yosh_ * m.manipulability);
+
+      m.manip_world_y_norm =
+        1.0 - std::exp(
+          -k_world_y_ * m.manip_world_y);
+
+      m.manip_tool_neg_z_norm =
+        1.0 - std::exp(
+          -k_tool_z_ * m.manip_tool_neg_z);
+    }
+
+    RCLCPP_INFO(get_logger(),
+      "Normalized %zu metric samples",
+      metrics_list_.size());
+  }
+
+  void saveNormalization()
+  {
+    YAML::Emitter out;
+
+    out << YAML::BeginMap;
+    out << YAML::Key << "manipulability";
+    out << YAML::BeginMap;
+
+    out << YAML::Key << "k_yosh" << YAML::Value << k_yosh_;
+    out << YAML::Key << "k_world_y" << YAML::Value << k_world_y_;
+    out << YAML::Key << "k_tool_z" << YAML::Value << k_tool_z_;
+
+    out << YAML::EndMap;
+    out << YAML::EndMap;
+
+    std::ofstream fout(yaml_src_path_);
+    fout << out.c_str();
+
+    RCLCPP_INFO(get_logger(), "Saved normalization constants");
+  }
+
+  bool loadNormalization()
+  {
+    if (!std::filesystem::exists(yaml_src_path_))
+      return false;
+
+    YAML::Node config = YAML::LoadFile(yaml_src_path_);
+
+    k_yosh_ = config["manipulability"]["k_yosh"].as<double>();
+    k_world_y_ = config["manipulability"]["k_world_y"].as<double>();
+    k_tool_z_ = config["manipulability"]["k_tool_z"].as<double>();
+
+    RCLCPP_INFO(get_logger(), "Loaded normalization constants");
+
+    return true;
+  }
+
   // Members
   moveit::core::RobotModelPtr robot_model_;
   moveit::core::RobotStatePtr robot_state_;
@@ -509,6 +749,18 @@ private:
 
   tf2_ros::Buffer tf_buffer_;
   tf2_ros::TransformListener tf_listener_;
+
+  double k_yosh_ = -1.0;
+  double k_world_y_ = -1.0;
+  double k_tool_z_ = -1.0;
+  bool normalization_loaded_ = false;
+  const double robot_length_ = 0.85;
+  double threshold_col = 0.3;
+
+  std::vector<IKMetrics> metrics_list_;
+  std::string pkg_path = ament_index_cpp::get_package_share_directory("moveit_cpp_demo");
+  std::string manip_metrics_path = pkg_path + "/config/manipulability.yaml";
+  std::string yaml_src_path_ = "/home/rosdev/ros2_ws/src/moveit_cpp_demo/config/manipulability.yaml";
 };
 
 int main(int argc, char** argv)

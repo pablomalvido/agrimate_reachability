@@ -25,8 +25,8 @@ class SegmentSamplerNode(Node):
         # =========================
         # PARAMETERS (same as your script)
         # =========================
-        self.A = np.array([-0.85, 0.0, 0.9])
-        self.B = np.array([0.85, 0.0, 0.9])
+        self.A = np.array([-0.9, 0.0, 0.75])
+        self.B = np.array([0.9, 0.0, 0.75])
         self.z_seg = self.A[2]
 
         # spreads

@@ -32,6 +32,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/SampleOrientations.srv"
   "srv/AddBox.srv"
   "srv/RemoveBox.srv"
+  "srv/CollisionCost.srv"
   DEPENDENCIES geometry_msgs
 )
 
