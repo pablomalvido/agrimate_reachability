@@ -30,7 +30,7 @@ if(BUILD_TESTING)
 endif()
 
 add_executable(move_robot src/move_robot.cpp)
-add_executable(ik_checker src/reachability_ik_checker_v4.cpp)
+add_executable(ik_checker src/reachability_ik_checker_v5.cpp)
 add_executable(ik_test src/ik_test.cpp)
 add_executable(collisions_server src/collisions_server.cpp)
 add_executable(ik_collisions src/ik_collisions_v2.cpp)

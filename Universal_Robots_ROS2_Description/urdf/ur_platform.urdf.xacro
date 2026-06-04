@@ -63,7 +63,7 @@
    <!-- create link fixed to the "world" -->
    <!-- <link name="vineyard_base" /> -->
    <link name="vineyard_base">
-    <!-- <visual>
+    <visual>
         <origin xyz="0 0 0" rpy="0 0 0"/>
         <geometry>
          <mesh filename="package://ur_description/meshes/vineyard/grapevine_v2.stl" scale="1 1 1"/>
@@ -71,7 +71,7 @@
         <material name="grey">
           <color rgba="0.6 0.6 0.6 1.0"/>
         </material>
-    </visual> -->
+    </visual>
    </link>
 
    <joint name="world_to_vineyard" type="fixed">
