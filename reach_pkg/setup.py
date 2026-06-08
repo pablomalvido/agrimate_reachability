@@ -34,7 +34,8 @@ setup(
             'orientation_service = reach_pkg.node_angles_cone:main',
             'sample_poses = reach_pkg.node_broadcast_poses:main',
             'passive_joints_platform_publisher = reach_pkg.passive_joints_platform:main',
-            'collisions_cost_server = reach_pkg.collisions_cost_server:main'
+            'collisions_cost_server = reach_pkg.collisions_cost_server:main',
+            'generic_br = reach_pkg.generic_broadcaster:main'
         ],
     },
 )

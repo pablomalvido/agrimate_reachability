@@ -18,3 +18,9 @@ ros2 run moveit_cpp_demo ik_checker   --ros-args   --params-file install/ur_move
 
 # Collision cost distribution
 ros2 run reach_pkg collisions_cost_server
+
+# Visualize robot with GUI to move joints
+ros2 launch ur_description view_ur.launch.py ur_type:=ur5e
+
+# Visualize random valid configs every 2s for robot with no controllers
+ros2 run moveit_cpp_demo fake_state_pub 

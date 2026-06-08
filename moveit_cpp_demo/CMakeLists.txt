@@ -16,6 +16,7 @@ find_package(moveit_msgs REQUIRED)
 find_package(moveit_ros_planning_interface REQUIRED)
 find_package(ament_index_cpp REQUIRED)
 find_package(yaml-cpp REQUIRED)
+find_package(sensor_msgs REQUIRED)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
@@ -30,10 +31,11 @@ if(BUILD_TESTING)
 endif()
 
 add_executable(move_robot src/move_robot.cpp)
-add_executable(ik_checker src/reachability_ik_checker_v5.cpp)
+add_executable(ik_checker src/reachability_ik_checker_v5.cpp src/simplified_bayesian_optimizer.cpp)
 add_executable(ik_test src/ik_test.cpp)
 add_executable(collisions_server src/collisions_server.cpp)
 add_executable(ik_collisions src/ik_collisions_v2.cpp)
+add_executable(fake_state_pub src/fake_joint_publisher.cpp)
 
 
 ament_target_dependencies(move_robot 
@@ -77,9 +79,14 @@ ament_target_dependencies(ik_collisions
   shape_msgs
 )
 
+ament_target_dependencies(fake_state_pub 
+  rclcpp
+  sensor_msgs
+)
+
 target_link_libraries(ik_checker yaml-cpp)
 
-install(TARGETS move_robot ik_checker ik_test collisions_server ik_collisions
+install(TARGETS move_robot ik_checker ik_test collisions_server ik_collisions fake_state_pub
   DESTINATION lib/${PROJECT_NAME}
 )
 

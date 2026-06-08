@@ -30,6 +30,10 @@
 #include <ament_index_cpp/get_package_share_directory.hpp>
 
 #include <custom_interfaces/srv/collision_cost.hpp>
+#include <moveit_msgs/msg/display_robot_state.hpp>
+#include <moveit/robot_state/conversions.h>
+
+#include "simplified_bayesian_optimizer.hpp"
 
 class IKReachabilityNode : public rclcpp::Node
 {
@@ -83,6 +87,9 @@ public:
     move_group_->setPlanningTime(0.6);
     move_group_->setNumPlanningAttempts(50);
 
+    robot_state_pub_ = this->create_publisher<moveit_msgs::msg::DisplayRobotState>("/display_robot_state", 10);
+    publisher_passive_joints_ = this->create_publisher<sensor_msgs::msg::JointState>("/passive_joint_commands", 10);
+
     normalization_loaded_ = loadNormalization();
     col_cost_client_ = this->create_client<custom_interfaces::srv::CollisionCost>("collision_cost");
     while (!col_cost_client_->wait_for_service(std::chrono::seconds(1)))
@@ -107,28 +114,162 @@ public:
       return ;
     }
 
+    RCLCPP_INFO(
+      this->get_logger(),
+      "End effector link: %s",
+      move_group_->getEndEffectorLink().c_str());
+
+    //LOAD FROM YAML
+    double y_min = -1.0; //m
+    double y_max = -0.5; //m
+    double rot_min = -0.8; //rad
+    double rot_max = 0.8; //rad
+    double z_min = -0.05; //m
+    double z_max = 0.35; //m
+    SimplifiedBayesianOptimizer optimizer(
+      y_min, y_max,     // Y limits
+      z_min, z_max,      // Z limits
+      rot_min, rot_max);    // roll limits
+
+    std::vector<PlacementSample> history;
+
+    // std::vector<double> config = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+    // setRobotConfiguration(config);
+
+    // std::vector<double> current;
+
+    // robot_state_->copyJointGroupPositions(
+    //     joint_model_group_,
+    //     current);
+
+    // RCLCPP_INFO(
+    //     get_logger(),
+    //     "Joints = %f, %f, %f, %f, %f, %f",
+    //     current[0], current[1], current[2], current[3], current[4], current[5]);
+    
+    for (int iter = 0; iter < 100; ++iter)
+    {
+        Placement p = optimizer.proposeNext(history);
+
+        new_config_ = computeRobotConfig(p.z, p.roll, z_min, z_max); //Computes the joint values
+        applyRobotPlacement(p.y, p.z, p.roll); //Updates robot base position
+
+        try
+        {
+          geometry_msgs::msg::TransformStamped tf_world_to_vineyard = 
+            tf_buffer_.lookupTransform(
+              "vineyard_base",   // target frame
+              "world",      // source frame
+              tf2::TimePointZero);
+
+          T_vineyard_world = tf2::transformToEigen(tf_world_to_vineyard.transform);
+        }
+        catch (tf2::TransformException &ex)
+        {
+          RCLCPP_WARN(get_logger(), "TF error: %s", ex.what());
+          return ;
+        }
+
+        bool valid_state = setRobotConfiguration(new_config_); //Updates the joint values and robot state (not visually though)
+        if (!valid_state){
+          RCLCPP_WARN(get_logger(), "State not valid");
+
+          // history.push_back({
+          //     p.y,
+          //     p.z,
+          //     p.roll,
+          //     0.0,
+          //     iter,
+          // });
+
+          RCLCPP_INFO(
+            get_logger(),
+            "### CONIFG: Vineyard: %f, Z: %f, Rot: %f, Shoulder: %f",
+            p.y, p.z, p.roll, new_config_[1]);
+
+          continue;
+        }
+
+        // const auto& tf =
+        //     robot_state_->getGlobalLinkTransform("base_link");
+
+        // RCLCPP_INFO(get_logger(),
+        //             "Base position: %.3f %.3f %.3f",
+        //             tf.translation().x(),
+        //             tf.translation().y(),
+        //             tf.translation().z());
+
+        // for (const auto& name : robot_state_->getVariableNames())
+        // {
+        //     RCLCPP_INFO(get_logger(), "%s", name.c_str());
+        // }
+
+        ReachabilityConfig config;
+        config.pose_prefix = "sample_pose_";
+        config.enable_planning = true;
+        config.planning_probability = 0.3;
+        double score = evaluateReachability(config).total_cost;
+
+        //Evaluate also for scan and for grasp. Then the score will be the weighted average of these. CHANGE the part of the collision obstacle, simply spawn a collision obstacle at the vineyard base of certain dimensions
+
+        history.push_back({
+            p.y,
+            p.z,
+            p.roll,
+            score,
+            iter,
+        });
+
+        std::cout
+            << "Iter " << iter
+            << " score=" << score
+            << std::endl;
+    }
+
+    // Sort history by best score (higher = better)
+    std::sort(history.begin(), history.end(),
+              [](const auto &a, const auto &b) {
+                  return a.score > b.score;
+              });
+
+    // Print top 
+    std::cout << "\n===== TOP CONFIGURATIONS =====\n";
+
+    for (size_t i = 0; i < std::min<size_t>(100, history.size()); ++i)
+    {
+        const auto &h = history[i];
+
+        std::cout << "Rank " << i + 1
+                  << " | Iteration=" << h.iter
+                  << " | y=" << h.y
+                  << " z=" << h.z
+                  << " roll=" << h.roll
+                  << " score=" << h.score
+                  << std::endl;
+    }
+
     // Design space exploration: separate scripts that run different exploration policies (CEM, Gen Alg, etc.) to test them. Test all these with just one task and with no planning, to be faster.
     // CONFIG for each task: TF prefix, add collision obstacle and at which offset from the pose?, weight, planning % 
-    ReachabilityConfig config;
-    config.pose_prefix = "sample_pose_";
-    config.enable_planning = true;
-    config.planning_probability = 0.2;
+    // ReachabilityConfig config;
+    // config.pose_prefix = "sample_pose_";
+    // config.enable_planning = false;
+    // config.planning_probability = 0.2;
 
-    auto result =
-      evaluateReachability(config);
+    // auto result =
+    //   evaluateReachability(config);
 
-    ReachabilityConfig config2;
-    config2.pose_prefix = "sample_pose_";
-    config2.enable_planning = false;
-    config2.planning_probability = 0.2;
+    // ReachabilityConfig config2;
+    // config2.pose_prefix = "sample_pose_";
+    // config2.enable_planning = false;
+    // config2.planning_probability = 0.2;
 
-    auto result2 =
-      evaluateReachability(config2);
+    // auto result2 =
+    //   evaluateReachability(config2);
 
-    RCLCPP_INFO(
-      get_logger(),
-      "FINAL SCORE: %f",
-      (result.total_cost + result2.total_cost)/2);
+    // RCLCPP_INFO(
+    //   get_logger(),
+    //   "FINAL SCORE: %f",
+    //   result.total_cost);
   }
 
 
@@ -245,6 +386,128 @@ private:
     std::vector<IKMetrics> metrics_list;
   };
 
+  std::vector<double> computeRobotConfig(
+    double slider_z,
+    double cylinder_rot,
+    double z_min,
+    double z_max)
+  {
+    std::vector<double> q(6, 0.0);
+
+    //--------------------------------------------------
+    // Example mapping
+    // Replace with your own equations
+    //--------------------------------------------------
+
+    q[0] = 0.0;
+    //q[1] is done later
+    q[2] = 1.93;
+    q[3] = -2.96;
+    q[4] = -1.75;
+    q[5] = -1.6;
+
+    double alpha = 0.0;
+
+    if (slider_z > 0.0){
+      alpha = (slider_z) / (z_max);
+    }
+
+    alpha = std::clamp(alpha, 0.0, 1.0);
+
+    q[1] =  -1.35 + alpha * 1.35;
+    q[1] += -cylinder_rot * 1.05;
+
+    return q;
+  }
+
+  void applyRobotPlacement(double p_y, double p_z, double p_roll)
+  {
+    auto msg = sensor_msgs::msg::JointState();
+    msg.name = {
+        "world_to_vineyard",
+        "platform_to_slider",
+        "platform_to_cylinder"
+    };
+
+    msg.position = {
+        p_y,
+        p_z,
+        p_roll
+    };
+
+    publisher_passive_joints_->publish(msg);
+
+    robot_state_->setVariablePosition("platform_to_slider", p_z);
+    robot_state_->setVariablePosition("platform_to_cylinder", p_roll);
+    robot_state_->setVariablePosition("world_to_vineyard", p_y);
+
+    robot_state_->update();
+  }
+
+  bool setRobotConfiguration(const std::vector<double>& joint_values)
+  {
+      if (joint_values.size() !=
+          joint_model_group_->getVariableCount())
+      {
+          RCLCPP_ERROR(
+            get_logger(),
+            "Expected %u joints, got %zu",
+            joint_model_group_->getVariableCount(),
+            joint_values.size());
+
+          return false;
+      }
+
+      //--------------------------------------------------
+      // Update internal RobotState
+      //--------------------------------------------------
+
+      robot_state_->setJointGroupPositions(
+          joint_model_group_,
+          joint_values);
+
+      robot_state_->update();
+
+      std::vector<double> current;
+
+      robot_state_->copyJointGroupPositions(
+          joint_model_group_,
+          current);
+
+      // for(double q : current)
+      // {
+      //     RCLCPP_INFO(get_logger(), "%f", q);
+      // }
+
+      //--------------------------------------------------
+      // Update Planning Scene state
+      //--------------------------------------------------
+
+      planning_scene_->setCurrentState(*robot_state_);
+
+      //--------------------------------------------------
+      // Update MoveGroup start state
+      //--------------------------------------------------
+
+      move_group_->setStartState(*robot_state_);
+
+      //--------------------------------------------------
+      // Publish state to RViz
+      //--------------------------------------------------
+
+      moveit_msgs::msg::DisplayRobotState msg;
+
+      moveit::core::robotStateToRobotStateMsg(
+          *robot_state_,
+          msg.state);
+
+      robot_state_pub_->publish(msg);
+
+      // RCLCPP_INFO(get_logger(), "Robot configuration updated");
+
+      return isStateValid(robot_state_.get());
+  }
+
   IKMetrics computeMetrics()
   {
     IKMetrics m;
@@ -311,6 +574,7 @@ private:
     // =========================
     // Jacobian
     // =========================
+
     Eigen::MatrixXd J;
 
     robot_state_->getJacobian(
@@ -411,13 +675,14 @@ private:
     std::vector<double> joint_values;
     robot_state_->copyJointGroupPositions(joint_model_group_, joint_values);
 
-    // 🔹 Set start state (predefined config)
-    moveit::core::RobotState start_state(robot_model_);
-    start_state.setToDefaultValues(joint_model_group_, "start_config");
+    // // Set start state (predefined config)
+    // moveit::core::RobotState start_state(robot_model_);
+    // start_state.setToDefaultValues(joint_model_group_, "start_config");
+    // move_group_->setStartState(start_state);
+    setRobotConfiguration(new_config_);
 
-    move_group_->setStartState(start_state);
 
-    // 🔹 Set goal = IK solution
+    // Set goal = IK solution
     move_group_->setJointValueTarget(joint_values);
 
     moveit::planning_interface::MoveGroupInterface::Plan plan;
@@ -430,14 +695,15 @@ private:
 
   bool planToPose(const geometry_msgs::msg::Pose& target_pose)
   {
-    // 🔹 Set start state (predefined config)
-    moveit::core::RobotState start_state(robot_model_);
-    start_state.setToDefaultValues(joint_model_group_, "start_config");
+    // // 🔹 Set start state (predefined config)
+    // moveit::core::RobotState start_state(robot_model_);
+    // start_state.setToDefaultValues(joint_model_group_, "start_config");
+    // move_group_->setStartState(start_state);
 
-    move_group_->setStartState(start_state);
+    setRobotConfiguration(new_config_);
 
-    // 🔹 Set goal = pose
-    move_group_->setPoseTarget(target_pose);
+    // Set goal = pose
+    move_group_->setPoseTarget(target_pose, "ee_link");
 
     moveit::planning_interface::MoveGroupInterface::Plan plan;
 
@@ -534,7 +800,8 @@ private:
       // Different seed each time
       if (attempt==0)
       {
-        robot_state_->setToDefaultValues();
+        //robot_state_->setToDefaultValues();
+        setRobotConfiguration(new_config_);
       }
       else{
         robot_state_->setToRandomPositions(joint_model_group_);
@@ -1068,6 +1335,11 @@ private:
   const moveit::core::JointModelGroup* joint_model_group_;
   std::shared_ptr<moveit::planning_interface::MoveGroupInterface> move_group_;
 
+  rclcpp::Publisher<moveit_msgs::msg::DisplayRobotState>::SharedPtr robot_state_pub_;
+  std::vector<double> new_config_ = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+
+  rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr publisher_passive_joints_;
+
   std::string base_frame_;
   double col_distance_;
   std::vector<std::pair<std::string, std::string>> col_link_pairs =
@@ -1075,7 +1347,8 @@ private:
     {"forearm_link", "wrist_1_link"},
     {"wrist_1_link", "wrist_2_link"},
     {"wrist_2_link", "wrist_3_link"},
-    {"wrist_3_link", "tool0"} //Change "tool0" to "tcp_link"
+    {"wrist_3_link", "tool0"},
+    {"tool0", "ee_link"} //Change "tool0" to "tcp_link"
   };
   rclcpp::Client<custom_interfaces::srv::CollisionCost>::SharedPtr col_cost_client_;
 
@@ -1090,14 +1363,15 @@ private:
   const double robot_length_ = 0.85;
   double threshold_col = 0.15;
 
+  // Do not need to add to 1, it is later normalized
   const std::unordered_map<std::string, double> metric_weights_ =
   {
-    {"joint_centering_cost", 0.25},
-    {"col_distance_norm",    0.15},
-    {"col_interference",     0.20},
-    {"manipulability_norm",  0.10},
-    {"manip_world_y_norm",   0.15},
-    {"manip_tool_neg_z_norm",0.15}
+    {"joint_centering_cost", 0.3},
+    {"col_distance_norm",    0.1},
+    {"col_interference",     0.1},
+    {"manipulability_norm",  0.2},
+    {"manip_world_y_norm",   0.2},
+    {"manip_tool_neg_z_norm",0.3}
   };
 
   std::vector<IKMetrics> metrics_list_;
