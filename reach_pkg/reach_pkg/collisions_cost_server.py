@@ -17,8 +17,14 @@ class ProbabilityFieldServer(Node):
         # =========================
         # PARAMETERS
         # =========================
-        self.z_seg = 0.7
-        self.z_cut = 0.7
+        self.declare_parameter('cordon_height', 0.7)
+        self.declare_parameter('cordon_length', 1.6)
+
+        cordon_height = self.get_parameter('cordon_height').value
+        cordon_length = self.get_parameter('cordon_length').value
+
+        self.z_seg = cordon_height
+        self.z_cut = cordon_height
 
         self.width = 0.16
 
@@ -31,8 +37,8 @@ class ProbabilityFieldServer(Node):
         self.sigma_z = 1.0
 
         # Plane patch bounds
-        self.x_min = -0.9
-        self.x_max = 0.9
+        self.x_min = -cordon_length/2
+        self.x_max = cordon_length/2
 
         self.y_min = -self.width / 2.0
         self.y_max = self.width / 2.0

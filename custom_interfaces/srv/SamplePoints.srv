@@ -1,3 +1,10 @@
 int32 n
+float64[] segment1
+float64[] segment2
+float64 sigma_x
+float64 sigma_y
+float64 sigma_zpos
+float64 sigma_zneg
+float64[] boundaries
 ---
 geometry_msgs/Point[] points

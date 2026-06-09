@@ -13,11 +13,14 @@ ros2 run reach_pkg orientation_service
 # Pruning poses broadcaster
 ros2 run reach_pkg sample_poses
 
-# IK checker
-ros2 run moveit_cpp_demo ik_checker   --ros-args   --params-file install/ur_moveit_config/share/ur_moveit_config/config/kinematics.yaml
-
 # Collision cost distribution
 ros2 run reach_pkg collisions_cost_server
+
+# Broadcasts all poses and launches collision cost distrib node
+ros2 run reach_pkg generic_broadcaster.launch.py
+
+# IK checker
+ros2 run moveit_cpp_demo ik_checker   --ros-args   --params-file install/ur_moveit_config/share/ur_moveit_config/config/kinematics.yaml
 
 # Visualize robot with GUI to move joints
 ros2 launch ur_description view_ur.launch.py ur_type:=ur5e

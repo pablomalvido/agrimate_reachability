@@ -13,8 +13,8 @@ def generate_launch_description():
 
     orientation_service = Node(
         package='reach_pkg',
-        executable='orientation_service',
-        name='orientation_service',
+        executable='orientation_cone_service',
+        name='orientation_cone_service',
         output='screen'
     )
 

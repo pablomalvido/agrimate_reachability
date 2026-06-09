@@ -23,28 +23,23 @@ class SamplePoseTFBroadcaster(Node):
         self.declare_parameter('n', 50)
         self.declare_parameter('tf_prefix', 'sample_pose')
         self.declare_parameter('parent_frame', 'vineyard_base')
-
-        self.declare_parameter(
-            'points_service',
-            'sample_points'
-        )
-
-        self.declare_parameter(
-            'orientations_service',
-            'sample_orientations'
-        )
+        self.declare_parameter('points_service', 'sample_points')
+        self.declare_parameter('orientations_service', 'sample_orientations')
+        self.declare_parameter('max_angles', [0.0, 0.0, 0.0])
+        self.declare_parameter('pos_center1', [0.0, 0.0, 0.0])
+        self.declare_parameter('pos_center2', [0.0, 0.0, 0.0])
+        self.declare_parameter('pos_sigma', [0.1, 0.1, 0.1, 0.1]) #x, y, zpos, zneg
+        self.declare_parameter('pos_boundaries', [-0.1, 0.1, -0.1, 0.1, -0.1, 0.1])
 
         self.n = self.get_parameter('n').value
         self.tf_prefix = self.get_parameter('tf_prefix').value
         self.parent_frame = self.get_parameter('parent_frame').value
-
-        points_service = self.get_parameter(
-            'points_service'
-        ).value
-
-        orientations_service = self.get_parameter(
-            'orientations_service'
-        ).value
+        points_service = self.get_parameter('points_service').value
+        orientations_service = self.get_parameter('orientations_service').value
+        self.max_angles = self.get_parameter('max_angles').value
+        self.pos_center = [self.get_parameter('pos_center1').value, self.get_parameter('pos_center2').value]
+        self.pos_sigma = self.get_parameter('pos_sigma').value
+        self.pos_boundaries = self.get_parameter('pos_boundaries').value
 
         self.get_logger().info(
             f'n={self.n}, '
@@ -110,6 +105,14 @@ class SamplePoseTFBroadcaster(Node):
         req_p = SamplePoints.Request()
         req_p.n = self.n
 
+        req_p.segment1 = self.pos_center[0]
+        req_p.segment2 = self.pos_center[1]
+        req_p.sigma_x = self.pos_sigma[0]
+        req_p.sigma_y = self.pos_sigma[1]
+        req_p.sigma_zpos = self.pos_sigma[2]
+        req_p.sigma_zneg = self.pos_sigma[3]
+        req_p.boundaries = self.pos_boundaries
+
         future_p = self.points_cli.call_async(req_p)
         future_p.add_done_callback(
             self.points_callback
@@ -118,9 +121,9 @@ class SamplePoseTFBroadcaster(Node):
         req_o = SampleOrientations.Request()
         req_o.n = self.n
 
-        req_o.max_angle_x = 0.87
-        req_o.max_angle_y = 0.87
-        req_o.max_yaw = 0.87
+        req_o.max_angle_x = self.max_angles[0]
+        req_o.max_angle_y = self.max_angles[1]
+        req_o.max_yaw = self.max_angles[2]
 
         future_o = self.orient_cli.call_async(req_o)
         future_o.add_done_callback(

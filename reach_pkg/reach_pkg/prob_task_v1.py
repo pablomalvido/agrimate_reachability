@@ -4,11 +4,22 @@ import plotly.graph_objects as go
 
 # =========================
 # PARAMETERS
+#
+# A segment center of the Gaussian (end 1)
+# B segment center of the Gaussian (end 2)
+# ax_x	Base spread in the X direction (at Z segment)
+# bx_x	How X spread changes as you move away from the segment in Z (How ax_x changes as Z increases/decreases)
+# ax_y	Base spread in the Y direction (at Z segment)
+# bx_y	How Y spread changes as you move away from the segment in Z (How ax_y changes as Z increases/decreases)
+# az_pos	Base spread in Z above the segment
+# bz_pos	Growth rate of Z spread above the segment (How az_pos changes as Z increases)
+# az_neg	Base spread in Z below the segment
+# bz_neg	Growth rate of Z spread below the segment (How az_neg changes as Z decreases)
 # =========================
 
 # Segment endpoints
-A = np.array([-0.85, 0.0, 1.0])
-B = np.array([0.85, 0.0, 1.0])
+A = np.array([-0.9, 0.0, 0.75])
+B = np.array([0.9, 0.0, 0.75])
 z_seg = A[2]
 
 # Spread parameters (independent axes)
@@ -16,7 +27,7 @@ ax_x, bx_x = 0.2, 0.0
 ax_y, bx_y = 0.2, 0.0
 
 # Z asymmetry
-az_pos, bz_pos = 0.3, 0.0   # above segment
+az_pos, bz_pos = 0.2, 0.0   # above segment
 az_neg, bz_neg = 0.15, 0.0   # below segment
 
 # =========================
@@ -98,18 +109,18 @@ density *= mask_box
 # =========================
 # VISUALIZATION
 # =========================
-fig = go.Figure(data=go.Isosurface(
-    x=x.flatten(),
-    y=y.flatten(),
-    z=z.flatten(),
-    value=density.flatten(),
-    isomin=0.2,
-    isomax=1.0,
-    surface_count=3,
-))
+# fig = go.Figure(data=go.Isosurface(
+#     x=x.flatten(),
+#     y=y.flatten(),
+#     z=z.flatten(),
+#     value=density.flatten(),
+#     isomin=0.2,
+#     isomax=1.0,
+#     surface_count=3,
+# ))
 
-fig.update_layout(title="Anisotropic segment-based distribution with asymmetric Z spread")
-fig.show()
+# fig.update_layout(title="Anisotropic segment-based distribution with asymmetric Z spread")
+# fig.show()
 
 # =========================
 # CROSS SECTIONS

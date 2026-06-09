@@ -22,28 +22,6 @@ class SegmentSamplerNode(Node):
 
         self.get_logger().info("Segment sampler service ready")
 
-        # =========================
-        # PARAMETERS (same as your script)
-        # =========================
-        self.A = np.array([-0.9, 0.0, 0.75])
-        self.B = np.array([0.9, 0.0, 0.75])
-        self.z_seg = self.A[2]
-
-        # spreads
-        self.ax_x, self.bx_x = 0.2, 0.0
-        self.ax_y, self.bx_y = 0.2, 0.0
-
-        self.az_pos, self.bz_pos = 0.2, 0.0
-        self.az_neg, self.bz_neg = 0.15, 0.0
-
-        # bounds
-        self.x_min, self.x_max = -1.1, 1.1
-        self.y_min, self.y_max = -0.25, 0.25
-        self.z_min, self.z_max = 0.7, 1.4
-
-        # precompute
-        self.AB = self.B - self.A
-        self.AB2 = np.dot(self.AB, self.AB)
 
     # =========================
     # PROBABILITY FUNCTION
@@ -108,13 +86,30 @@ class SegmentSamplerNode(Node):
         n = request.n
         self.get_logger().info(f"Sampling {n} points")
 
-        # float64[] segment1
-        # float64[] segment2
-        # float64 sigma_x
-        # float64 sigma_y
-        # float64 sigma_zpos
-        # float64 sigma_zneg
-        # float64[] boundaries
+        # =========================
+        # PARAMETERS (same as your script)
+        # =========================
+        self.A = np.array(request.segment1)
+        self.B = np.array(request.segment2)
+        self.z_seg = self.A[2]
+
+        # spreads
+        self.ax_x, self.bx_x = request.sigma_x, 0.0
+        self.ax_y, self.bx_y = request.sigma_y, 0.0
+
+        self.az_pos, self.bz_pos = request.sigma_zpos, 0.0
+        self.az_neg, self.bz_neg = request.sigma_zneg, 0.0
+
+        # bounds
+        (
+            self.x_min, self.x_max,
+            self.y_min, self.y_max,
+            self.z_min, self.z_max
+        ) = request.boundaries
+
+        # precompute
+        self.AB = self.B - self.A
+        self.AB2 = np.dot(self.AB, self.AB)
 
         pts = self.sample_points(n)
 

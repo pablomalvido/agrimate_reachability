@@ -123,7 +123,7 @@ public:
     double y_min = -1.0; //m
     double y_max = -0.5; //m
     double rot_min = -0.8; //rad
-    double rot_max = 0.8; //rad
+    double rot_max = 1.05; //rad
     double z_min = -0.05; //m
     double z_max = 0.35; //m
     SimplifiedBayesianOptimizer optimizer(
@@ -204,18 +204,37 @@ public:
         //     RCLCPP_INFO(get_logger(), "%s", name.c_str());
         // }
 
-        ReachabilityConfig config;
-        config.pose_prefix = "sample_pose_";
-        config.enable_planning = true;
-        config.planning_probability = 0.3;
-        double score = evaluateReachability(config).total_cost;
+        ReachabilityConfig config_prune;
+        config_prune.pose_prefix = "pruning_pose_";
+        config_prune.enable_planning = true;
+        config_prune.planning_probability = 0.3;
+        config_prune.obstacle = "relative";
+        double score_prune = evaluateReachability(config_prune).total_cost;
 
         //Evaluate also for scan and for grasp. Then the score will be the weighted average of these. CHANGE the part of the collision obstacle, simply spawn a collision obstacle at the vineyard base of certain dimensions
+        ReachabilityConfig config_scan;
+        config_scan.pose_prefix = "scaning_pose_";
+        config_scan.enable_planning = true;
+        config_scan.planning_probability = 0.3;
+        config_scan.obstacle = "fixed";
+        double score_scan = evaluateReachability(config_scan).total_cost;
+
+        ReachabilityConfig config_grasp;
+        config_grasp.pose_prefix = "grasping_pose_";
+        config_grasp.enable_planning = true;
+        config_grasp.planning_probability = 0.3;
+        config_grasp.obstacle = "fixed";
+        double score_grasp = evaluateReachability(config_grasp).total_cost;
+
+        double score = 0.5*score_prune + 0.3*score_scan + 0.2*score_grasp;
 
         history.push_back({
             p.y,
             p.z,
             p.roll,
+            score_prune,
+            score_scan,
+            score_grasp,
             score,
             iter,
         });
@@ -245,6 +264,9 @@ public:
                   << " z=" << h.z
                   << " roll=" << h.roll
                   << " score=" << h.score
+                  << " score_prune=" << h.score1
+                  << " score_scan=" << h.score2
+                  << " score_grasp=" << h.score3
                   << std::endl;
     }
 
@@ -365,10 +387,9 @@ private:
   struct ReachabilityConfig
   {
     std::string pose_prefix = "sample_pose_";
-
     bool enable_planning = true;
-
     double planning_probability = 0.2;
+    std::string obstacle = "";
   };
 
   struct ReachabilityResult
@@ -719,6 +740,31 @@ private:
   // =========================
   // OBSTACLE
   // =========================
+  void addFixedBoxObstacle()
+  {
+    moveit_msgs::msg::CollisionObject obj;
+    obj.id = "temp_box";
+    obj.header.frame_id = "vineyard_base";
+    obj.pose.position.x = 0.0;
+    obj.pose.position.y = 0.0;
+    float dim_z = 0.7;
+    obj.pose.position.z = dim_z/2.0;
+    obj.pose.orientation.w = 1.0;
+
+    shape_msgs::msg::SolidPrimitive primitive;
+    primitive.type = primitive.BOX;
+    primitive.dimensions = {1.0, 0.10, dim_z};
+
+    geometry_msgs::msg::Pose box_pose;
+    box_pose.orientation.w = 1.0;
+
+    obj.primitives.push_back(primitive);
+    obj.primitive_poses.push_back(box_pose);
+    obj.operation = obj.ADD;
+
+    planning_scene_->processCollisionObjectMsg(obj);
+  }
+
   void addBoxObstacle(const geometry_msgs::msg::Pose& target_pose)
   {
     moveit_msgs::msg::CollisionObject obj;
@@ -751,6 +797,18 @@ private:
     moveit_msgs::msg::CollisionObject obj;
     obj.id = "temp_box";
     obj.header.frame_id = base_frame_;
+    obj.operation = obj.REMOVE;
+
+    planning_scene_->processCollisionObjectMsg(obj);
+
+    // RCLCPP_INFO(get_logger(), "Obstacle removed");
+  }
+
+  void removeFixedBoxObstacle()
+  {
+    moveit_msgs::msg::CollisionObject obj;
+    obj.id = "temp_box";
+    obj.header.frame_id = "vineyard_base";
     obj.operation = obj.REMOVE;
 
     planning_scene_->processCollisionObjectMsg(obj);
@@ -970,7 +1028,12 @@ private:
       pose.orientation =
         transform.transform.rotation;
 
-      addBoxObstacle(pose);
+      if (config.obstacle=="relative"){
+        addBoxObstacle(pose);
+      }
+      else if (config.obstacle=="fixed"){
+        addFixedBoxObstacle();
+      }
 
       bool found_ik =
         computeIKWithRetries(pose);
@@ -998,8 +1061,12 @@ private:
           }
         }
       }
-
-      removeBoxObstacle();
+      if (config.obstacle=="relative"){
+        removeBoxObstacle();
+      }
+      else if (config.obstacle=="fixed"){
+        removeFixedBoxObstacle();
+      }
     }
 
     // =========================

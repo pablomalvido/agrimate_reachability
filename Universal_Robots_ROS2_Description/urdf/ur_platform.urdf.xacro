@@ -64,7 +64,7 @@
    <!-- <link name="vineyard_base" /> -->
    <link name="vineyard_base">
     <visual>
-        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <origin xyz="0 0 0.15" rpy="0 0 0"/>
         <geometry>
          <mesh filename="package://ur_description/meshes/vineyard/grapevine_v2.stl" scale="1 1 1"/>
         </geometry>

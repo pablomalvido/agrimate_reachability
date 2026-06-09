@@ -7,6 +7,9 @@ struct PlacementSample
     double y;
     double z;
     double roll;
+    double score1;
+    double score2;
+    double score3;
     double score;
     int iter;
 };
