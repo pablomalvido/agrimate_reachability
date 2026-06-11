@@ -4,7 +4,7 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
 
-    vineyard_length = 1.6
+    vineyard_length = 0.8
     cordon_height = 0.75 #From the surface on which the robot is standing to the center of the cordon
 
     pruning_positions_service = Node(

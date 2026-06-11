@@ -119,9 +119,24 @@ public:
       "End effector link: %s",
       move_group_->getEndEffectorLink().c_str());
 
+    if (robot_type_=="ur5" or robot_type_=="ur5e"){
+      robot_length_ = 0.85;
+    }
+    else if (robot_type_=="ur3" or robot_type_=="ur3e"){
+      robot_length_ = 0.5;
+    }
+
     //LOAD FROM YAML
-    double y_min = -1.0; //m
-    double y_max = -0.5; //m
+    double y_min;
+    double y_max; 
+    if (robot_type_ == "ur5e" or robot_type_ == "ur5"){
+      y_min = -1.0; //m
+      y_max = -0.5; //m
+    }
+    else if (robot_type_ == "ur3e" or robot_type_ == "ur3"){
+      y_min = -0.7; //m
+      y_max = -0.35; //m
+    }
     double rot_min = -0.8; //rad
     double rot_max = 1.05; //rad
     double z_min = -0.05; //m
@@ -147,7 +162,7 @@ public:
     //     "Joints = %f, %f, %f, %f, %f, %f",
     //     current[0], current[1], current[2], current[3], current[4], current[5]);
     
-    for (int iter = 0; iter < 100; ++iter)
+    for (int iter = 0; iter < 200; ++iter)
     {
         Placement p = optimizer.proposeNext(history);
 
@@ -207,7 +222,7 @@ public:
         ReachabilityConfig config_prune;
         config_prune.pose_prefix = "pruning_pose_";
         config_prune.enable_planning = true;
-        config_prune.planning_probability = 0.3;
+        config_prune.planning_probability = 0.4;
         config_prune.obstacle = "relative";
         double score_prune = evaluateReachability(config_prune).total_cost;
 
@@ -215,14 +230,14 @@ public:
         ReachabilityConfig config_scan;
         config_scan.pose_prefix = "scaning_pose_";
         config_scan.enable_planning = true;
-        config_scan.planning_probability = 0.3;
+        config_scan.planning_probability = 0.4;
         config_scan.obstacle = "fixed";
         double score_scan = evaluateReachability(config_scan).total_cost;
 
         ReachabilityConfig config_grasp;
         config_grasp.pose_prefix = "grasping_pose_";
         config_grasp.enable_planning = true;
-        config_grasp.planning_probability = 0.3;
+        config_grasp.planning_probability = 0.4;
         config_grasp.obstacle = "fixed";
         double score_grasp = evaluateReachability(config_grasp).total_cost;
 
@@ -254,7 +269,7 @@ public:
     // Print top 
     std::cout << "\n===== TOP CONFIGURATIONS =====\n";
 
-    for (size_t i = 0; i < std::min<size_t>(100, history.size()); ++i)
+    for (size_t i = 0; i < std::min<size_t>(1000, history.size()); ++i)
     {
         const auto &h = history[i];
 
@@ -1376,6 +1391,7 @@ private:
     std::ofstream fout(yaml_src_path_);
     fout << out.c_str();
 
+    normalization_loaded_ = true;
     RCLCPP_INFO(get_logger(), "Saved normalization constants");
   }
 
@@ -1396,6 +1412,7 @@ private:
   }
 
   // Members
+  std::string robot_type_ = "ur5e";
   moveit::core::RobotModelPtr robot_model_;
   moveit::core::RobotStatePtr robot_state_;
   planning_scene::PlanningScenePtr planning_scene_;
@@ -1427,7 +1444,7 @@ private:
   double k_world_y_ = -1.0;
   double k_tool_z_ = -1.0;
   bool normalization_loaded_ = false;
-  const double robot_length_ = 0.85;
+  double robot_length_ = 0.85; 
   double threshold_col = 0.15;
 
   // Do not need to add to 1, it is later normalized
@@ -1443,8 +1460,8 @@ private:
 
   std::vector<IKMetrics> metrics_list_;
   std::string pkg_path = ament_index_cpp::get_package_share_directory("moveit_cpp_demo");
-  std::string manip_metrics_path = pkg_path + "/config/manipulability.yaml";
-  std::string yaml_src_path_ = "/home/rosdev/ros2_ws/src/moveit_cpp_demo/config/manipulability.yaml";
+  std::string manip_metrics_path = pkg_path + "/config/manipulability_" + robot_type_ + ".yaml";
+  std::string yaml_src_path_ = "/home/rosdev/ros2_ws/src/moveit_cpp_demo/config/manipulability_" + robot_type_ + ".yaml";
 };
 
 int main(int argc, char** argv)

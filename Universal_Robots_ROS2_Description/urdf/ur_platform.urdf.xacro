@@ -85,7 +85,7 @@
     <child link="vineyard_base"/>
     <origin xyz="0.15 -0.25 0"/>
     <axis xyz="0 1 0"/>
-    <limit lower="-1.0" upper="-0.5" effort="100" velocity="0.5"/>
+    <limit lower="-1.0" upper="0.0" effort="100" velocity="0.5"/>
    </joint>
 
      <!-- Platform -->
@@ -246,7 +246,8 @@
   </link>
 
   <joint name="ee_joint" type="fixed">
-    <origin xyz="0 0 0.2" rpy="0 0 0"/>
+    <!-- <origin xyz="0 0 0.2" rpy="0 0 -1.57"/> Straight tool -->
+    <origin xyz="-0.2 0 0" rpy="0 -1.57 0"/> <!--L-shape tool -->
     <parent link="tool0"/>
     <child link="ee_link"/>
   </joint>
