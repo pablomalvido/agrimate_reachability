@@ -10,7 +10,7 @@ option=2 #0:Linear, 1: RBF, 2: Nadaraya Watson
 # LOAD FILE
 # ============================================================
 
-filename = "/home/rosdev/ros2_ws/src/reach_pkg/data/history_ur5_length_1_6.txt"
+filename = "/home/rosdev/ros2_ws/src/reach_pkg/data/history_ur5_length_0_8_Lshape.txt"
 
 with open(filename, "r") as f:
     text = f.read()

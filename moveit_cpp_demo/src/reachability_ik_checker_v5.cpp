@@ -438,9 +438,17 @@ private:
     q[0] = 0.0;
     //q[1] is done later
     q[2] = 1.93;
-    q[3] = -2.96;
-    q[4] = -1.75;
-    q[5] = -1.6;
+
+    if(tool_placement_=="straight"){
+      q[3] = -2.96;
+      q[4] = -1.75;
+      q[5] = -1.6;
+    }
+    else if(tool_placement_=="Lshape"){
+      q[3] = 0.0;
+      q[4] = 0.0;
+      q[5] = 0.0;
+    }
 
     double alpha = 0.0;
 
@@ -1412,7 +1420,8 @@ private:
   }
 
   // Members
-  std::string robot_type_ = "ur5e";
+  std::string robot_type_ = "ur3e";
+  std::string tool_placement_ = "Lshape"; //"straight" or "Lshape"
   moveit::core::RobotModelPtr robot_model_;
   moveit::core::RobotStatePtr robot_state_;
   planning_scene::PlanningScenePtr planning_scene_;
