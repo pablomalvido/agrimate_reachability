@@ -4,11 +4,14 @@ ros2 launch ur_robot_driver ur_platform_control.launch.py ur_type:=ur5e robot_ip
 # Launch moveit
 ros2 launch ur_moveit_config ur_platform_moveit.launch.py ur_type:=ur5e launch_rviz:=true
 
-# Launch positions sampler
-ros2 run reach_pkg pruning_positions_service
+# Launch sampler
+ros2 launch reach_pkg generic_broadcaster.launch.py
 
-# Launch orientation sampler
-ros2 run reach_pkg orientation_service
+# Launch optimizer
+ros2 run moveit_cpp_demo ik_checker   --ros-args   --params-file install/ur_moveit_config/share/ur_moveit_config/config/kinematics.yaml
 
-# Pruning poses broadcaster
-ros2 run reach_pkg sample_poses
+# Just view the robot
+ros2 launch ur_description view_ur.launch.py ur_type:=ur5e
+
+# Generate heatmap
+python3 src/reach_pkg/reach_pkg/heatmap_v2.py

@@ -33,7 +33,10 @@
 #include <moveit_msgs/msg/display_robot_state.hpp>
 #include <moveit/robot_state/conversions.h>
 
-#include "simplified_bayesian_optimizer.hpp"
+#include "moveit_cpp_demo/simplified_bayesian_optimizer.hpp"
+#include "moveit_cpp_demo/types.hpp"
+#include "moveit_cpp_demo/utils.hpp"
+
 
 class IKReachabilityNode : public rclcpp::Node
 {
@@ -147,6 +150,7 @@ public:
       rot_min, rot_max);    // roll limits
 
     std::vector<PlacementSample> history;
+    std::vector<FullPlacementSample> full_history;
 
     // std::vector<double> config = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
     // setRobotConfiguration(config);
@@ -162,7 +166,7 @@ public:
     //     "Joints = %f, %f, %f, %f, %f, %f",
     //     current[0], current[1], current[2], current[3], current[4], current[5]);
     
-    for (int iter = 0; iter < 200; ++iter)
+    for (int iter = 0; iter < 2; ++iter)
     {
         Placement p = optimizer.proposeNext(history);
 
@@ -202,6 +206,17 @@ public:
             "### CONIFG: Vineyard: %f, Z: %f, Rot: %f, Shoulder: %f",
             p.y, p.z, p.roll, new_config_[1]);
 
+          std::vector<double> current;
+
+          robot_state_->copyJointGroupPositions(
+              joint_model_group_,
+              current);
+
+          RCLCPP_INFO(
+              get_logger(),
+              "Joints = %f, %f, %f, %f, %f, %f",
+              current[0], current[1], current[2], current[3], current[4], current[5]);
+
           continue;
         }
 
@@ -224,7 +239,7 @@ public:
         config_prune.enable_planning = true;
         config_prune.planning_probability = 0.4;
         config_prune.obstacle = "relative";
-        double score_prune = evaluateReachability(config_prune).total_cost;
+        ReachabilityResult score_prune = evaluateReachability(config_prune);
 
         //Evaluate also for scan and for grasp. Then the score will be the weighted average of these. CHANGE the part of the collision obstacle, simply spawn a collision obstacle at the vineyard base of certain dimensions
         ReachabilityConfig config_scan;
@@ -232,18 +247,29 @@ public:
         config_scan.enable_planning = true;
         config_scan.planning_probability = 0.4;
         config_scan.obstacle = "fixed";
-        double score_scan = evaluateReachability(config_scan).total_cost;
+        ReachabilityResult score_scan = evaluateReachability(config_scan);
 
         ReachabilityConfig config_grasp;
         config_grasp.pose_prefix = "grasping_pose_";
         config_grasp.enable_planning = true;
         config_grasp.planning_probability = 0.4;
         config_grasp.obstacle = "fixed";
-        double score_grasp = evaluateReachability(config_grasp).total_cost;
+        ReachabilityResult score_grasp = evaluateReachability(config_grasp);
 
-        double score = 0.5*score_prune + 0.3*score_scan + 0.2*score_grasp;
+        double score = 0.5*score_prune.total_cost + 0.3*score_scan.total_cost + 0.2*score_grasp.total_cost;
 
         history.push_back({
+            p.y,
+            p.z,
+            p.roll,
+            score_prune.total_cost,
+            score_scan.total_cost,
+            score_grasp.total_cost,
+            score,
+            iter,
+        });
+
+        full_history.push_back({
             p.y,
             p.z,
             p.roll,
@@ -282,6 +308,15 @@ public:
                   << " score_prune=" << h.score1
                   << " score_scan=" << h.score2
                   << " score_grasp=" << h.score3
+                  << std::endl;
+    }
+
+    std::string filepath = saveHistoryToFile("score_" + robot_type_ + "_" + tool_placement_, full_history);
+
+    if (!filepath.empty())
+    {
+        std::cout << "History saved to: "
+                  << filepath
                   << std::endl;
     }
 
@@ -370,57 +405,6 @@ public:
   }
 
 private:
-  struct IKMetrics
-  {
-    std::vector<double> joint_values;
-    //std::vector<double> dist_to_limits;
-
-    double joint_centering_cost;
-    double col_distance;
-    double col_distance_norm;
-    double col_interference;
-    double manipulability;
-    double manipulability_norm;
-    double manip_world_y;
-    double manip_world_y_norm;
-    double manip_tool_neg_z;
-    double manip_tool_neg_z_norm;
-    double manip_world_y_fast;
-    double manip_tool_neg_z_fast;
-  };
-
-  struct MeanMetrics
-  {
-    double joint_centering_cost = 0.0;
-    double col_distance_norm = 0.0;
-    double col_interference = 0.0;
-    double manipulability_norm = 0.0;
-    double manip_world_y_norm = 0.0;
-    double manip_tool_neg_z_norm = 0.0;
-  };
-
-  struct ReachabilityConfig
-  {
-    std::string pose_prefix = "sample_pose_";
-    bool enable_planning = true;
-    double planning_probability = 0.2;
-    std::string obstacle = "";
-  };
-
-  struct ReachabilityResult
-  {
-    int ik_success_count = 0;
-
-    int planning_success_count = 0;
-
-    int planning_total_count = 0;
-
-    MeanMetrics mean_metrics;
-
-    double total_cost = 0.0;
-
-    std::vector<IKMetrics> metrics_list;
-  };
 
   std::vector<double> computeRobotConfig(
     double slider_z,
@@ -437,14 +421,16 @@ private:
 
     q[0] = 0.0;
     //q[1] is done later
-    q[2] = 1.93;
+    //q[2] = 1.93;
 
     if(tool_placement_=="straight"){
+      q[2] = 1.93;
       q[3] = -2.96;
       q[4] = -1.75;
       q[5] = -1.6;
     }
     else if(tool_placement_=="Lshape"){
+      q[2] = 1.6;
       q[3] = 0.0;
       q[4] = 0.0;
       q[5] = 0.0;
@@ -549,7 +535,49 @@ private:
 
       // RCLCPP_INFO(get_logger(), "Robot configuration updated");
 
-      return isStateValid(robot_state_.get());
+      //return isStateValid(robot_state_.get());
+
+      bool valid = planning_scene_->isStateValid(*robot_state_);
+
+      if (!valid){
+        collision_detection::CollisionRequest req;
+        collision_detection::CollisionResult res;
+
+        req.contacts = true;
+        req.max_contacts = 100;
+        req.max_contacts_per_pair = 10;
+
+        res.clear();
+
+        planning_scene_->checkCollision(
+            req,
+            res,
+            *robot_state_
+        );
+
+        if (res.collision)
+        {
+            RCLCPP_WARN(get_logger(), "Robot is in collision");
+
+            for (const auto& contact_pair : res.contacts)
+            {
+                const std::string& link1 = contact_pair.first.first;
+                const std::string& link2 = contact_pair.first.second;
+
+                RCLCPP_WARN(
+                    get_logger(),
+                    "Collision between %s and %s",
+                    link1.c_str(),
+                    link2.c_str()
+                );
+            }
+        }
+        else
+        {
+            RCLCPP_INFO(get_logger(), "No collision");
+        }
+      }
+      return valid;
   }
 
   IKMetrics computeMetrics()
@@ -1114,13 +1142,23 @@ private:
     result.mean_metrics =
       computeMeanMetrics(metrics_list_);
 
+    result.ik_total_count = total_poses;
+
+    result.ik_success_ratio =
+      (result.ik_total_count > 0)
+        ? static_cast<double>(result.ik_success_count) / result.ik_total_count
+        : 1.0;
+
+    result.planning_success_ratio =
+      (result.planning_total_count > 0)
+        ? static_cast<double>(result.planning_success_count) / result.planning_total_count
+        : 1.0;
+
     result.total_cost =
       computeTotalCost(
         result.mean_metrics,
-        result.ik_success_count,
-        total_poses,
-        result.planning_success_count,
-        result.planning_total_count);
+        result.ik_success_ratio,
+        result.planning_success_ratio);
 
     logMeanMetrics(result.mean_metrics);
 
@@ -1175,10 +1213,8 @@ private:
 
   double computeTotalCost(
     const MeanMetrics& means,
-    int ik_success_count,
-    int total_ik,
-    int plan_success_count,
-    int total_plan)
+    double ik_success_ratio,
+    double planning_success_ratio)
   {
     // =========================
     // Normalize weights
@@ -1239,23 +1275,10 @@ private:
         w_tool_z * tool_z_quality;
 
     // =========================
-    // Success ratios
-    // =========================
-    double ik_ratio =
-      (total_ik > 0)
-        ? static_cast<double>(ik_success_count) / total_ik
-        : 1.0;
-
-    double planning_ratio =
-      (total_plan > 0)
-        ? static_cast<double>(plan_success_count) / total_plan
-        : 1.0;
-
-    // =========================
     // Final total cost
     // =========================
     double total_cost =
-      metric_score * ik_ratio * planning_ratio;
+      metric_score * ik_success_ratio * planning_success_ratio;
 
     // =========================
     // Logs
@@ -1266,11 +1289,11 @@ private:
 
     RCLCPP_INFO(get_logger(),
       "IK success ratio: %f",
-      ik_ratio);
+      ik_success_ratio);
 
     RCLCPP_INFO(get_logger(),
       "Planning success ratio: %f",
-      planning_ratio);
+      planning_success_ratio);
 
     RCLCPP_INFO(get_logger(),
       "========== TOTAL COST (0 => Worst, 1 => Best) ==========");
@@ -1420,7 +1443,7 @@ private:
   }
 
   // Members
-  std::string robot_type_ = "ur3e";
+  std::string robot_type_ = "ur5e"; //"ur5e" or "ur3e"
   std::string tool_placement_ = "Lshape"; //"straight" or "Lshape"
   moveit::core::RobotModelPtr robot_model_;
   moveit::core::RobotStatePtr robot_state_;

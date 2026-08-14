@@ -104,7 +104,8 @@
         <origin xyz="0 0 0" rpy="0 0 0"/>
         <geometry>
         <!-- <mesh filename="$(find ur_description)/meshes/platform/left_lateral.STL" scale="1 1 1"/> -->
-         <mesh filename="package://ur_description/meshes/platform/left_lateral.STL" scale="1 1 1"/>
+        <!-- <mesh filename="package://ur_description/meshes/platform/left_lateral.STL" scale="1 1 1"/>  -->
+        <mesh filename="package://ur_description/meshes/platform/left_portico_collision_v2.STL" scale="1 1 1"/>
         </geometry>
     </collision>
    </link>
@@ -146,7 +147,8 @@
     <!-- Move up/down -->
     <axis xyz="0 0 1"/>
 
-    <limit lower="-0.1" upper="0.3" effort="100" velocity="0.5"/>
+    <!-- <limit lower="-0.1" upper="0.3" effort="100" velocity="0.5"/> -->
+    <limit lower="-0.1" upper="0.6" effort="100" velocity="0.5"/>
   </joint>
 
   <joint name="platform_to_cylinder" type="revolute">
@@ -155,7 +157,8 @@
     <!-- Adjust this position -->
     <origin xyz="0.15 -0.25 0.0" rpy="0 0 0"/>
     <axis xyz="1 0 0"/>
-    <limit lower="-1.57" upper="1.57" effort="10" velocity="1.0"/>
+    <!-- <limit lower="-1.57" upper="1.57" effort="10" velocity="1.0"/> -->
+    <limit lower="-1.57" upper="4.71" effort="10" velocity="1.0"/>
   </joint>
   
    <xacro:if value="${is_sim_gazebo or is_sim_ignition}">
@@ -246,8 +249,10 @@
   </link>
 
   <joint name="ee_joint" type="fixed">
-    <!-- <origin xyz="0 0 0.2" rpy="0 0 -1.57"/> Straight tool -->
-    <origin xyz="-0.2 0 0" rpy="0 -1.57 0"/> <!--L-shape tool -->
+    <!-- Straight tool -->
+    <!-- <origin xyz="0 0 0.2" rpy="0 0 -1.57"/> -->
+    <!-- L-shape tool  -->
+    <origin xyz="-0.2 0 0" rpy="0 -1.57 0"/>
     <parent link="tool0"/>
     <child link="ee_link"/>
   </joint>

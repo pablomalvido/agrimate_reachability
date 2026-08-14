@@ -1,4 +1,4 @@
-#include "simplified_bayesian_optimizer.hpp"
+#include "moveit_cpp_demo/simplified_bayesian_optimizer.hpp"
 
 #include <random>
 #include <limits>
