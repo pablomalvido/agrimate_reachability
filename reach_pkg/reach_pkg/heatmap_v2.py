@@ -17,7 +17,8 @@ option = 2  # 0: Linear, 1: RBF, 2: Nadaraya-Watson
 # LOAD FILE
 # ============================================================
 
-filename = "/home/rosdev/ros2_ws/src/reach_pkg/data/history_ur5_length_0_8.txt"
+#filename = "/home/rosdev/ros2_ws/src/reach_pkg/data/history_ur5_length_0_8.txt"
+filename = "/home/rosdev/ros2_ws/src/moveit_cpp_demo/data/scores/score_ur5e_straight_1.txt" #Upside down
 
 with open(filename, "r") as f:
     text = f.read()
@@ -281,18 +282,37 @@ for score_name in score_columns:
     #
     # However, using percentiles is generally safer.
 
-    vmin = np.quantile(score_current, 0.30)
-    vmax = np.quantile(score_current, 1.0) *0.9
+    # ========================================================
+    # COLOR LIMITS
+    # ========================================================
+
+    vmin = np.quantile(score_current, 0.15)
+    vmax = np.max(score_current) * 0.98
+
+    # If the requested range is invalid, fall back to
+    # the actual data range.
+    if vmin > vmax:
+
+        print(
+            f"  Warning: vmin ({vmin:.6g}) > "
+            f"vmax ({vmax:.6g}) for {score_name}. "
+            "Using actual data range."
+        )
+
+        vmin = np.min(score_current)
+        vmax = np.max(score_current)
+
 
     # Avoid zero-width color scale
     if np.isclose(vmin, vmax):
 
-        vmin = score_current.min()
-        vmax = score_current.max()
-
-    if np.isclose(vmin, vmax):
-
-        vmax = vmin + 1e-12
+        if np.isclose(vmin, 0.0):
+            vmin = 0.0
+            vmax = 1e-12
+        else:
+            margin = abs(vmin) * 0.01
+            vmin -= margin
+            vmax += margin
 
 
     # --------------------------------------------------------

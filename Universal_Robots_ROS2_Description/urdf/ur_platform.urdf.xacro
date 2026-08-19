@@ -250,9 +250,9 @@
 
   <joint name="ee_joint" type="fixed">
     <!-- Straight tool -->
-    <!-- <origin xyz="0 0 0.2" rpy="0 0 -1.57"/> -->
+    <origin xyz="0 0 0.2" rpy="0 0 -1.57"/>
     <!-- L-shape tool  -->
-    <origin xyz="-0.2 0 0" rpy="0 -1.57 0"/>
+    <!-- <origin xyz="-0.2 0 0" rpy="0 -1.57 0"/> -->
     <parent link="tool0"/>
     <child link="ee_link"/>
   </joint>

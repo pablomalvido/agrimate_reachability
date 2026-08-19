@@ -1,0 +1,2 @@
+score_ur5e_Lshape_5: upside down Z: 0.4-0.6, Roll: 1.57-4.71, Y: 0.5, 1.0
+score_ur5e_straight_1: upside down Z: 0.4-0.6, Roll: 1.57-4.71, Y: 0.5, 1.0

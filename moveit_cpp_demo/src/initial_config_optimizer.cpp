@@ -99,6 +99,45 @@ struct PlacementConfig
     int selected_candidate = -1;
 };
 
+struct InitialConfigParameters
+{
+    // Joint limits
+    std::vector<double> joint_lower;
+    std::vector<double> joint_upper;
+
+    // Placement grid
+    double y_min;
+    double y_max;
+    int n_y;
+
+    double z_min;
+    double z_max;
+    int n_z;
+
+    double roll_min;
+    double roll_max;
+    int n_roll;
+
+    // Cartesian EE box
+    double cart_x_min;
+    double cart_x_max;
+
+    double cart_y_min;
+    double cart_y_max;
+
+    double cart_z_min;
+    double cart_z_max;
+
+    // Candidate generation
+    int n_random_candidates;
+    int k;
+    int number_of_representative_targets;
+
+    // Files
+    std::string raw_table_file;
+    std::string final_table_file;
+};
+
 
 // ============================================================================
 // NODE
@@ -132,6 +171,22 @@ public:
 
         rclcpp::sleep_for(
             std::chrono::seconds(2));
+
+        // ---------------------------------------------------------------------
+        // Load configuration parameters
+        // ---------------------------------------------------------------------
+
+        const std::string config_file =
+            "/home/rosdev/ros2_ws/src/moveit_cpp_demo/config/initial_config_upsidedown_straight.yaml";
+
+        if (!loadInitialConfigParameters(config_file))
+        {
+            RCLCPP_ERROR(
+                get_logger(),
+                "Could not load initial configuration parameters");
+
+            return;
+        }
 
 
         // ---------------------------------------------------------------------
@@ -306,50 +361,6 @@ private:
             get_logger(),
             "==============================================");
 
-
-        // ---------------------------------------------------------------------
-        // Placement grid
-        //
-        // These are your current dimensions:
-        //
-        // Y
-        // Z
-        // ROLL
-        // ---------------------------------------------------------------------
-
-        const double y_min = -1.0;
-        const double y_max = -0.5;
-
-        const double z_min = -0.05;
-        const double z_max = 0.35;
-
-        const double roll_min = -0.8;
-        const double roll_max = 1.05;
-
-
-        // Number of samples in each dimension.
-        //
-        // CHANGE THESE.
-        //
-        const int n_y = 1;
-        const int n_z = 10;
-        const int n_roll = 10;
-
-
-        // ---------------------------------------------------------------------
-        // Number of random configurations per placement.
-        // ---------------------------------------------------------------------
-
-        const int n_random_candidates = 200;
-
-
-        // ---------------------------------------------------------------------
-        // Number of candidates preserved per placement.
-        // ---------------------------------------------------------------------
-
-        const int K = 10;
-
-
         // ---------------------------------------------------------------------
         // Smoothing
         // ---------------------------------------------------------------------
@@ -369,7 +380,7 @@ private:
 
 
         for (int iy = 0;
-             iy < n_y;
+             iy < params_.n_y;
              ++iy)
         {
             // double y =
@@ -379,31 +390,35 @@ private:
             //         iy,
             //         n_y);
 
-            double y = -0.75; // Fixed Y for now
-
+            double y = 0.0;
+            if (params_.n_y == 1){
+                y = (params_.y_min + params_.y_max) / 2.0;
+            } else {
+                y = interpolateGrid(params_.y_min, params_.y_max, iy, params_.n_y);
+            }           
 
             for (int iz = 0;
-                 iz < n_z;
+                 iz < params_.n_z;
                  ++iz)
             {
                 double z =
                     interpolateGrid(
-                        z_min,
-                        z_max,
+                        params_.z_min,
+                        params_.z_max,
                         iz,
-                        n_z);
+                        params_.n_z);
 
 
                 for (int ir = 0;
-                     ir < n_roll;
+                     ir < params_.n_roll;
                      ++ir)
                 {
                     double roll =
                         interpolateGrid(
-                            roll_min,
-                            roll_max,
+                            params_.roll_min,
+                            params_.roll_max,
                             ir,
-                            n_roll);
+                            params_.n_roll);
 
 
                     Placement p;
@@ -483,12 +498,12 @@ private:
 
             int valid_candidates = 0;
             for (int c = 0;
-                 c < n_random_candidates;
+                 c < params_.n_random_candidates;
                  ++c)
             {
 
                 double percentage =
-                    (100.0 * (i) / grid.size())+ (1.0 / grid.size() * (100.0 * (c) / n_random_candidates));
+                    (100.0 * (i) / grid.size())+ (1.0 / grid.size() * (100.0 * (c) / params_.n_random_candidates));
 
                 RCLCPP_INFO(
                 get_logger(),
@@ -501,7 +516,7 @@ private:
                 i + 1,
                 grid.size(),
                 c + 1,
-                n_random_candidates);
+                params_.n_random_candidates);
 
                 ConfigurationCandidate candidate;
 
@@ -578,9 +593,9 @@ private:
             // -------------------------------------------------------------
 
             if (candidates.size() >
-                static_cast<size_t>(K))
+                static_cast<size_t>(params_.k))
             {
-                candidates.resize(K);
+                candidates.resize(params_.k);
             }
 
 
@@ -696,36 +711,14 @@ private:
         //     joints);
 
         // ============================================================
-        // Custom random-sampling bounds
-        // ============================================================
-
-        std::vector<double> random_lower = {
-            0.0,      // joint 0 shoulder pan
-            -1.57,       // joint 1 shoulder lift
-            0.0,       // joint 2 elbow
-            -1.75,      // joint 3  wrist 1
-            0.0,       // joint 4  wrist 2
-            0.0      // joint 5  wrist 3
-        };
-
-        std::vector<double> random_upper = {
-            0.0,      // joint 0
-            1.0,       // joint 1
-            2.5,       // joint 2
-            1.75,      // joint 3
-            0.0,       // joint 4
-            0.0      // joint 5
-        };
-
-        // ============================================================
         // Generate random configuration inside those bounds
         // ============================================================
 
-        for (std::size_t i = 0; i < random_lower.size(); ++i)
+        for (std::size_t i = 0; i < params_.joint_lower.size(); ++i)
         {
             std::uniform_real_distribution<double> distribution(
-                random_lower[i],
-                random_upper[i]
+                params_.joint_lower[i],
+                params_.joint_upper[i]
             );
 
             joints[i] = distribution(rng_);
@@ -963,28 +956,13 @@ private:
         Eigen::Vector3d p =
             T.translation();
 
-
-        // -----------------------------------------------------------------
-        // CHANGE THESE TO YOUR ACTUAL EE REGION.
-        // -----------------------------------------------------------------
-
-        constexpr double x_min = -0.15; //0.15 is centered
-        constexpr double x_max =  0.45;
-
-        constexpr double y_min = -1.0;
-        constexpr double y_max =  -0.25;
-
-        constexpr double z_min =  0.15;
-        constexpr double z_max =  1.5;
-
-
         return
-            p.x() >= x_min &&
-            p.x() <= x_max &&
-            p.y() >= y_min &&
-            p.y() <= y_max &&
-            p.z() >= z_min &&
-            p.z() <= z_max;
+            p.x() >= params_.cart_x_min &&
+            p.x() <= params_.cart_x_max &&
+            p.y() >= params_.cart_y_min &&
+            p.y() <= params_.cart_y_max &&
+            p.z() >= params_.cart_z_min &&
+            p.z() <= params_.cart_z_max;
     }
 
 
@@ -1030,7 +1008,7 @@ private:
         // Planning is deliberately dominant.
         // -------------------------------------------------------------
 
-        constexpr double W_PLANNING = 10.0;
+        constexpr double W_PLANNING = 4.0;
 
         constexpr double W_MANIPULABILITY = 1.0;
 
@@ -1184,7 +1162,7 @@ private:
         const int N =
             std::min(
                 total,
-                number_of_representative_targets_);
+                params_.number_of_representative_targets);
 
 
         for (int i = 0;
@@ -2029,17 +2007,15 @@ private:
     void saveRawConfigurationTable(
         const std::vector<PlacementConfig>& table)
     {
-        std::string path =
-            "/home/rosdev/ros2_ws/src/moveit_cpp_demo/data/raw_configuration_table_2.txt";
 
-        std::ofstream file(path);
+        std::ofstream file(params_.raw_table_file);
 
         if (!file.is_open())
         {
             RCLCPP_ERROR(
                 get_logger(),
                 "Could not open %s",
-                path.c_str());
+                params_.raw_table_file.c_str());
 
             return;
         }
@@ -2104,18 +2080,15 @@ private:
         RCLCPP_INFO(
             get_logger(),
             "Saved RAW configuration table to %s",
-            path.c_str());
+            params_.raw_table_file.c_str());
     }
 
     void saveConfigurationTable(
         const std::vector<PlacementConfig>& table)
     {
-        std::string path =
-            "/home/rosdev/ros2_ws/src/moveit_cpp_demo/data/initial_configuration_table_2.txt";
-
 
         std::ofstream file(
-            path);
+            params_.final_table_file);
 
 
         if (!file.is_open())
@@ -2123,7 +2096,7 @@ private:
             RCLCPP_ERROR(
                 get_logger(),
                 "Could not open %s",
-                path.c_str());
+                params_.final_table_file.c_str());
 
             return;
         }
@@ -2179,7 +2152,7 @@ private:
         RCLCPP_INFO(
             get_logger(),
             "Saved final configuration table to %s",
-            path.c_str());
+            params_.final_table_file.c_str());
     }
 
 
@@ -2227,8 +2200,8 @@ private:
         obj.id = "temp_box";
         obj.header.frame_id = "world";
         obj.pose.position.x = 0.15;
-        obj.pose.position.y = -1.0;
-        float dim_z = 0.5;
+        obj.pose.position.y = -0.95; //-1 is -0.75
+        float dim_z = 0.55;
         obj.pose.position.z = dim_z/2.0;
         obj.pose.orientation.w = 1.0;
 
@@ -2256,6 +2229,187 @@ private:
         planning_scene_->processCollisionObjectMsg(obj);
 
         // RCLCPP_INFO(get_logger(), "Obstacle removed");
+    }
+
+    bool loadInitialConfigParameters(
+        const std::string& filename)
+    {
+        try
+        {
+            YAML::Node config =
+                YAML::LoadFile(filename);
+
+            // ========================================================
+            // Joint limits
+            // ========================================================
+
+            auto lower =
+                config["joint_limits"]["lower"];
+
+            auto upper =
+                config["joint_limits"]["upper"];
+
+            params_.joint_lower.clear();
+            params_.joint_upper.clear();
+
+            for (const auto& value : lower)
+            {
+                params_.joint_lower.push_back(
+                    value.as<double>());
+            }
+
+            for (const auto& value : upper)
+            {
+                params_.joint_upper.push_back(
+                    value.as<double>());
+            }
+
+            if (params_.joint_lower.size() != 6 ||
+                params_.joint_upper.size() != 6)
+            {
+                RCLCPP_ERROR(
+                    get_logger(),
+                    "Expected 6 joint limits");
+
+                return false;
+            }
+
+
+            // ========================================================
+            // Placement Y
+            // ========================================================
+
+            params_.y_min =
+                config["placement"]["y"]["min"].as<double>();
+
+            params_.y_max =
+                config["placement"]["y"]["max"].as<double>();
+
+            params_.n_y =
+                config["placement"]["y"]["n"].as<int>();
+
+
+            // ========================================================
+            // Placement Z
+            // ========================================================
+
+            params_.z_min =
+                config["placement"]["z"]["min"].as<double>();
+
+            params_.z_max =
+                config["placement"]["z"]["max"].as<double>();
+
+            params_.n_z =
+                config["placement"]["z"]["n"].as<int>();
+
+
+            // ========================================================
+            // Placement Roll
+            // ========================================================
+
+            params_.roll_min =
+                config["placement"]["roll"]["min"].as<double>();
+
+            params_.roll_max =
+                config["placement"]["roll"]["max"].as<double>();
+
+            params_.n_roll =
+                config["placement"]["roll"]["n"].as<int>();
+
+
+            // ========================================================
+            // Cartesian box
+            // ========================================================
+
+            params_.cart_x_min =
+                config["cartesian_box"]["x"]["min"].as<double>();
+
+            params_.cart_x_max =
+                config["cartesian_box"]["x"]["max"].as<double>();
+
+            params_.cart_y_min =
+                config["cartesian_box"]["y"]["min"].as<double>();
+
+            params_.cart_y_max =
+                config["cartesian_box"]["y"]["max"].as<double>();
+
+            params_.cart_z_min =
+                config["cartesian_box"]["z"]["min"].as<double>();
+
+            params_.cart_z_max =
+                config["cartesian_box"]["z"]["max"].as<double>();
+
+
+            // ========================================================
+            // Candidate parameters
+            // ========================================================
+
+            params_.n_random_candidates =
+                config["n_random_candidates"].as<int>();
+
+            params_.k =
+                config["k"].as<int>();
+
+            params_.number_of_representative_targets =
+                config[
+                    "number_of_representative_targets"
+                ].as<int>();
+
+
+            // ========================================================
+            // Output files
+            // ========================================================
+
+            params_.raw_table_file =
+                config["output"]["raw_table_file"]
+                    .as<std::string>();
+
+            params_.final_table_file =
+                config["output"]["final_table_file"]
+                    .as<std::string>();
+
+
+            // ========================================================
+            // Print configuration
+            // ========================================================
+
+            RCLCPP_INFO(
+                get_logger(),
+                "Loaded initial configuration parameters");
+
+            RCLCPP_INFO(
+                get_logger(),
+                "Placement grid: %d x %d x %d",
+                params_.n_y,
+                params_.n_z,
+                params_.n_roll);
+
+            RCLCPP_INFO(
+                get_logger(),
+                "Random candidates: %d",
+                params_.n_random_candidates);
+
+            RCLCPP_INFO(
+                get_logger(),
+                "K candidates retained: %d",
+                params_.k);
+
+            RCLCPP_INFO(
+                get_logger(),
+                "Representative targets: %d",
+                params_.number_of_representative_targets);
+
+            return true;
+        }
+        catch (const YAML::Exception& e)
+        {
+            RCLCPP_ERROR(
+                get_logger(),
+                "Failed to load configuration: %s",
+                e.what());
+
+            return false;
+        }
     }
 
 
@@ -2358,9 +2512,7 @@ private:
     double
         threshold_col = 0.15;
 
-
-    int
-        number_of_representative_targets_ = 10;
+    InitialConfigParameters params_;
 
 
     std::string

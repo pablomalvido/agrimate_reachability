@@ -29,8 +29,8 @@ setup(
     entry_points={
         'console_scripts': [
             'pruning_positions_service = reach_pkg.node_pruning_positions_generic:main',
-            'sample_positions = reach_pkg.node_broadcast_positions:main',
-            'sample_orientations = reach_pkg.node_broadcast_orientations:main',
+            'sample_positions = reach_pkg.other.node_broadcast_positions:main',
+            'sample_orientations = reach_pkg.other.node_broadcast_orientations:main',
             'orientation_cone_service = reach_pkg.node_angles_cone:main',
             'sample_poses = reach_pkg.node_broadcast_poses:main',
             'passive_joints_platform_publisher = reach_pkg.passive_joints_platform:main',

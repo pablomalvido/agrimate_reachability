@@ -7,10 +7,33 @@ from sensor_msgs.msg import JointState
 import numpy as np
 
 
+# ==========================================================
+# CONFIGURATION
+# ==========================================================
+
+TABLE_PATH = (
+    '/home/rosdev/ros2_ws/src/moveit_cpp_demo/'
+    'data/initial_config_optimization/final_configuration_table_upsidedown_straight.txt'
+)
+
+# ----------------------------------------------------------
+# Cluster to visualize
+#
+# 99 = visualize ALL clusters
+#
+# 0, 1, 2, ... = visualize only that cluster
+# ----------------------------------------------------------
+
+CLUSTER_TO_VISUALIZE = 0
+
+
 class PassiveJointPublisher(Node):
 
     def __init__(self):
-        super().__init__('passive_joint_pub')
+
+        super().__init__(
+            'passive_joint_pub'
+        )
 
         # ==========================================================
         # Publisher
@@ -26,12 +49,15 @@ class PassiveJointPublisher(Node):
         # Configuration table
         # ==========================================================
 
-        self.table_path = (
-            '/home/rosdev/ros2_ws/src/moveit_cpp_demo/'
-            'data/final_configuration_table_global2.txt'
-        )
+        self.table_path = TABLE_PATH
 
         self.load_table()
+
+        # ==========================================================
+        # Filter cluster
+        # ==========================================================
+
+        self.filter_cluster()
 
         # ==========================================================
         # Create the 3D grid
@@ -53,9 +79,17 @@ class PassiveJointPublisher(Node):
             np.unique(self.table[:, 5])
         )
 
-        self.n_y = len(self.y_values)
-        self.n_z = len(self.z_values)
-        self.n_roll = len(self.roll_values)
+        self.n_y = len(
+            self.y_values
+        )
+
+        self.n_z = len(
+            self.z_values
+        )
+
+        self.n_roll = len(
+            self.roll_values
+        )
 
         self.get_logger().info(
             f'Table loaded: {len(self.table)} rows'
@@ -63,12 +97,14 @@ class PassiveJointPublisher(Node):
 
         self.get_logger().info(
             f'Y:    {self.n_y} values '
-            f'[{self.y_values[0]:.6f}, {self.y_values[-1]:.6f}]'
+            f'[{self.y_values[0]:.6f}, '
+            f'{self.y_values[-1]:.6f}]'
         )
 
         self.get_logger().info(
             f'Z:    {self.n_z} values '
-            f'[{self.z_values[0]:.6f}, {self.z_values[-1]:.6f}]'
+            f'[{self.z_values[0]:.6f}, '
+            f'{self.z_values[-1]:.6f}]'
         )
 
         self.get_logger().info(
@@ -123,6 +159,13 @@ class PassiveJointPublisher(Node):
 
             raise
 
+        if self.table.ndim == 1:
+
+            self.table = self.table.reshape(
+                1,
+                -1
+            )
+
         # ----------------------------------------------------------
         # Expected columns:
         #
@@ -134,37 +177,136 @@ class PassiveJointPublisher(Node):
         # 5  Roll
         # 6  candidate
         # 7  quality
-        # 8  q0
-        # 9  q1
-        # 10 q2
-        # 11 q3
-        # 12 q4
-        # 13 q5
-        # 14 mode
+        # 8  planning_ratio
+        # 9  q0
+        # 10 q1
+        # 11 q2
+        # 12 q3
+        # 13 q4
+        # 14 q5
+        # 15 cluster
         # ----------------------------------------------------------
 
-        if self.table.ndim == 1:
-            self.table = self.table.reshape(1, -1)
-
-        if self.table.shape[1] < 15:
+        if self.table.shape[1] < 16:
 
             raise RuntimeError(
-                f'Expected at least 15 columns, '
+                f'Expected at least 16 columns, '
                 f'got {self.table.shape[1]}'
             )
+
+    # ==============================================================
+    # Filter by cluster
+    # ==============================================================
+
+    def filter_cluster(self):
+
+        # ----------------------------------------------------------
+        # 99 means no filtering
+        # ----------------------------------------------------------
+
+        if CLUSTER_TO_VISUALIZE == 99:
+
+            clusters = np.unique(
+                self.table[:, 15]
+            ).astype(int)
+
+            self.get_logger().info(
+                'Cluster filtering disabled.'
+            )
+
+            self.get_logger().info(
+                f'Visualizing all clusters: '
+                f'{clusters.tolist()}'
+            )
+
+            return
+
+        # ----------------------------------------------------------
+        # Available clusters
+        # ----------------------------------------------------------
+
+        available_clusters = np.unique(
+            self.table[:, 15]
+        ).astype(int)
+
+        # ----------------------------------------------------------
+        # Check requested cluster exists
+        # ----------------------------------------------------------
+
+        if CLUSTER_TO_VISUALIZE not in \
+                available_clusters:
+
+            raise RuntimeError(
+                f'Requested cluster '
+                f'{CLUSTER_TO_VISUALIZE} does not exist. '
+                f'Available clusters: '
+                f'{available_clusters.tolist()}'
+            )
+
+        # ----------------------------------------------------------
+        # Filter
+        # ----------------------------------------------------------
+
+        original_size = len(
+            self.table
+        )
+
+        mask = (
+            self.table[:, 15]
+            ==
+            CLUSTER_TO_VISUALIZE
+        )
+
+        self.table = self.table[
+            mask
+        ]
+
+        # ----------------------------------------------------------
+        # Check
+        # ----------------------------------------------------------
+
+        if len(self.table) == 0:
+
+            raise RuntimeError(
+                f'No rows found for cluster '
+                f'{CLUSTER_TO_VISUALIZE}'
+            )
+
+        self.get_logger().info(
+            f'Cluster filtering enabled.'
+        )
+
+        self.get_logger().info(
+            f'Visualizing cluster '
+            f'{CLUSTER_TO_VISUALIZE}'
+        )
+
+        self.get_logger().info(
+            f'Rows: {len(self.table)} / '
+            f'{original_size}'
+        )
 
     # ==============================================================
     # Find closest table row
     # ==============================================================
 
-    def find_closest_row(self, y, z, roll):
+    def find_closest_row(
+        self,
+        y,
+        z,
+        roll
+    ):
 
         # ----------------------------------------------------------
         # Compute squared Euclidean distance in task space
         # ----------------------------------------------------------
 
-        differences = self.table[:, 3:6] - np.array(
-            [y, z, roll]
+        differences = (
+            self.table[:, 3:6]
+            -
+            np.array(
+                [y, z, roll]
+            )
         )
 
         distances = np.sum(
@@ -172,9 +314,13 @@ class PassiveJointPublisher(Node):
             axis=1
         )
 
-        index = np.argmin(distances)
+        index = np.argmin(
+            distances
+        )
 
-        return self.table[index]
+        return self.table[
+            index
+        ]
 
     # ==============================================================
     # Publish next configuration
@@ -186,12 +332,20 @@ class PassiveJointPublisher(Node):
         # Current desired task-space configuration
         # ----------------------------------------------------------
 
-        y = self.y_values[self.i_y]
-        z = self.z_values[self.i_z]
-        roll = self.roll_values[self.i_roll]
+        y = self.y_values[
+            self.i_y
+        ]
+
+        z = self.z_values[
+            self.i_z
+        ]
+
+        roll = self.roll_values[
+            self.i_roll
+        ]
 
         # ----------------------------------------------------------
-        # Find closest configuration in table
+        # Find closest configuration in filtered table
         # ----------------------------------------------------------
 
         row = self.find_closest_row(
@@ -203,29 +357,28 @@ class PassiveJointPublisher(Node):
         # ----------------------------------------------------------
         # Extract q0 ... q5
         #
-        # Table:
+        # Columns:
         #
-        # Y Z ROLL candidate quality planning q0 q1 q2 q3 q4 q5
-
-        # 0  iy
-        # 1  iz
-        # 2  iroll
-        # 3  Y
-        # 4  Z
-        # 5  Roll
-        # 6  candidate
-        # 7  quality
-        # 8  q0
-        # 9  q1
-        # 10 q2
-        # 11 q3
-        # 12 q4
-        # 13 q5
-        # 14 mode
+        # 9  = q0
+        # 10 = q1
+        # 11 = q2
+        # 12 = q3
+        # 13 = q4
+        # 14 = q5
+        # 15 = cluster
         # ----------------------------------------------------------
 
-        #q = row[8:14]
-        q = row[9:15] #global
+        q = row[
+            9:15
+        ]
+
+        # ----------------------------------------------------------
+        # Cluster
+        # ----------------------------------------------------------
+
+        cluster = int(
+            row[15]
+        )
 
         # ----------------------------------------------------------
         # Publish robot joint state
@@ -233,9 +386,14 @@ class PassiveJointPublisher(Node):
 
         msg = JointState()
 
-        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.header.stamp = (
+            self.get_clock()
+            .now()
+            .to_msg()
+        )
 
         msg.name = [
+
             # Passive joints
             'platform_to_slider',
             'platform_to_cylinder',
@@ -251,6 +409,7 @@ class PassiveJointPublisher(Node):
         ]
 
         msg.position = [
+
             # Passive joints
             z,
             roll,
@@ -265,7 +424,9 @@ class PassiveJointPublisher(Node):
             q[5]
         ]
 
-        self.pub.publish(msg)
+        self.pub.publish(
+            msg
+        )
 
         # ----------------------------------------------------------
         # Logging
@@ -275,29 +436,43 @@ class PassiveJointPublisher(Node):
         table_z = row[4]
         table_roll = row[5]
 
-        mode = int(row[14])
-
         self.get_logger().info(
-            f'[{self.i_y}, {self.i_z}, {self.i_roll}] '
+            f'[{self.i_y}, '
+            f'{self.i_z}, '
+            f'{self.i_roll}] '
             f'Y={y:.6f} '
             f'Z={z:.6f} '
             f'Roll={roll:.6f} '
             f'-> '
-            f'q=[{q[0]:.3f}, '
+            f'q=['
+            f'{q[0]:.3f}, '
             f'{q[1]:.3f}, '
             f'{q[2]:.3f}, '
             f'{q[3]:.3f}, '
             f'{q[4]:.3f}, '
             f'{q[5]:.3f}] '
-            f'mode={mode}'
+            f'cluster={cluster}'
         )
 
-        # Optional: tell us if the closest table point
-        # was not exactly the requested point.
+        # ----------------------------------------------------------
+        # Optional warning if closest table point differs
+        # ----------------------------------------------------------
+
         if not (
-            np.isclose(y, table_y)
-            and np.isclose(z, table_z)
-            and np.isclose(roll, table_roll)
+            np.isclose(
+                y,
+                table_y
+            )
+            and
+            np.isclose(
+                z,
+                table_z
+            )
+            and
+            np.isclose(
+                roll,
+                table_roll
+            )
         ):
 
             self.get_logger().warn(
@@ -320,11 +495,13 @@ class PassiveJointPublisher(Node):
         if self.i_roll >= self.n_roll:
 
             self.i_roll = 0
+
             self.i_z += 1
 
             if self.i_z >= self.n_z:
 
                 self.i_z = 0
+
                 self.i_y += 1
 
                 if self.i_y >= self.n_y:
@@ -336,21 +513,33 @@ class PassiveJointPublisher(Node):
                     self.timer.cancel()
 
 
+# ==============================================================
+# MAIN
+# ==============================================================
+
 def main(args=None):
 
-    rclpy.init(args=args)
+    rclpy.init(
+        args=args
+    )
 
     node = PassiveJointPublisher()
 
     try:
-        rclpy.spin(node)
+
+        rclpy.spin(
+            node
+        )
 
     except KeyboardInterrupt:
+
         pass
 
     node.destroy_node()
+
     rclpy.shutdown()
 
 
 if __name__ == '__main__':
+
     main()

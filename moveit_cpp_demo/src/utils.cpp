@@ -50,7 +50,7 @@ std::string saveHistoryToFile(
 
     const int new_index = highest_used_index + 1;
 
-    const fs::path filepath = data_dir / (title + "_" + std::to_string(new_index) + ".txt");
+    const fs::path filepath = data_dir / "scores" / (title + "_" + std::to_string(new_index) + ".txt");
 
     std::ofstream file(filepath);
 
@@ -98,6 +98,22 @@ std::string saveHistoryToFile(
              << " prune_manipulability=" << h.result1.mean_metrics.manipulability_norm
              << " prune_manip_world_y=" << h.result1.mean_metrics.manip_world_y_norm
              << " prune_manip_tool_neg_z=" << h.result1.mean_metrics.manip_tool_neg_z_norm
+             << " scan_ik_success_ratio=" << h.result2.ik_success_ratio
+             << " scan_planning_success_ratio=" << h.result2.planning_success_ratio
+             << " scan_joint_centering_cost=" << h.result2.mean_metrics.joint_centering_cost
+             << " scan_col_distance=" << h.result2.mean_metrics.col_distance_norm
+             << " scan_col_interference=" << h.result2.mean_metrics.col_interference
+             << " scan_manipulability=" << h.result2.mean_metrics.manipulability_norm
+             << " scan_manip_world_y=" << h.result2.mean_metrics.manip_world_y_norm
+             << " scan_manip_tool_neg_z=" << h.result2.mean_metrics.manip_tool_neg_z_norm
+             << " grasp_ik_success_ratio=" << h.result3.ik_success_ratio
+             << " grasp_planning_success_ratio=" << h.result3.planning_success_ratio
+             << " grasp_joint_centering_cost=" << h.result3.mean_metrics.joint_centering_cost
+             << " grasp_col_distance=" << h.result3.mean_metrics.col_distance_norm
+             << " grasp_col_interference=" << h.result3.mean_metrics.col_interference
+             << " grasp_manipulability=" << h.result3.mean_metrics.manipulability_norm
+             << " grasp_manip_world_y=" << h.result3.mean_metrics.manip_world_y_norm
+             << " grasp_manip_tool_neg_z=" << h.result3.mean_metrics.manip_tool_neg_z_norm
              << '\n';
     }
 

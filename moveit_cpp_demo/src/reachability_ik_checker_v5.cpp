@@ -28,6 +28,11 @@
 #include <fstream>
 #include <filesystem>
 #include <ament_index_cpp/get_package_share_directory.hpp>
+#include <sstream>
+#include <limits>
+#include <cmath>
+#include <algorithm>
+#include <array>
 
 #include <custom_interfaces/srv/collision_cost.hpp>
 #include <moveit_msgs/msg/display_robot_state.hpp>
@@ -90,6 +95,17 @@ public:
     move_group_->setPlanningTime(0.6);
     move_group_->setNumPlanningAttempts(50);
 
+    const std::string table_path =
+        "/home/rosdev/ros2_ws/src/moveit_cpp_demo/"
+        "data/initial_config_optimization/final_configuration_table_upsidedown_straight.txt";
+
+    if (!loadRobotConfigTable(table_path)) {
+        RCLCPP_ERROR(
+            this->get_logger(),
+            "Failed to load robot configuration table."
+        );
+    }
+
     robot_state_pub_ = this->create_publisher<moveit_msgs::msg::DisplayRobotState>("/display_robot_state", 10);
     publisher_passive_joints_ = this->create_publisher<sensor_msgs::msg::JointState>("/passive_joint_commands", 10);
 
@@ -140,10 +156,10 @@ public:
       y_min = -0.7; //m
       y_max = -0.35; //m
     }
-    double rot_min = -0.8; //rad
-    double rot_max = 1.05; //rad
-    double z_min = -0.05; //m
-    double z_max = 0.35; //m
+    double rot_min = 1.2; //-0.8; //rad
+    double rot_max = 4.7; //1.05; //rad
+    double z_min = 0.4; //-0.05; //m
+    double z_max = 0.6; //0.35; //m
     SimplifiedBayesianOptimizer optimizer(
       y_min, y_max,     // Y limits
       z_min, z_max,      // Z limits
@@ -166,11 +182,12 @@ public:
     //     "Joints = %f, %f, %f, %f, %f, %f",
     //     current[0], current[1], current[2], current[3], current[4], current[5]);
     
-    for (int iter = 0; iter < 2; ++iter)
+    for (int iter = 0; iter < 200; ++iter)
     {
         Placement p = optimizer.proposeNext(history);
 
-        new_config_ = computeRobotConfig(p.z, p.roll, z_min, z_max); //Computes the joint values
+        new_config_ = computeRobotConfigFromTable(p.z, p.roll);
+        //new_config_ = computeRobotConfig(p.z, p.roll, z_min, z_max); //Computes the joint values
         applyRobotPlacement(p.y, p.z, p.roll); //Updates robot base position
 
         try
@@ -405,6 +422,159 @@ public:
   }
 
 private:
+
+std::vector<double> computeRobotConfigFromTable(
+      double slider_z,
+      double cylinder_rot)
+  {
+      std::vector<double> q(6, 0.0);
+
+      if (robot_config_table_.empty()) {
+
+          RCLCPP_ERROR(
+              this->get_logger(),
+              "Robot configuration table is empty!"
+          );
+
+          return q;
+      }
+
+      //--------------------------------------------------
+      // Find closest Z
+      //--------------------------------------------------
+
+      int closest_iz = -1;
+
+      double closest_z_distance =
+          std::numeric_limits<double>::max();
+
+      for (const auto& row : robot_config_table_) {
+
+          double table_z = row[4];
+
+          double distance =
+              std::abs(
+                  table_z - slider_z
+              );
+
+          if (distance < closest_z_distance) {
+
+              closest_z_distance = distance;
+
+              closest_iz =
+                  static_cast<int>(
+                      std::round(row[1])
+                  );
+          }
+      }
+
+      //--------------------------------------------------
+      // Find closest Roll
+      //--------------------------------------------------
+
+      int closest_iroll = -1;
+
+      double closest_roll_distance =
+          std::numeric_limits<double>::max();
+
+      for (const auto& row : robot_config_table_) {
+
+          double table_roll = row[5];
+
+          double distance =
+              std::abs(
+                  table_roll - cylinder_rot
+              );
+
+          if (distance < closest_roll_distance) {
+
+              closest_roll_distance = distance;
+
+              closest_iroll =
+                  static_cast<int>(
+                      std::round(row[2])
+                  );
+          }
+      }
+
+      //--------------------------------------------------
+      // Find configuration at
+      //
+      // (closest_iz, closest_iroll)
+      //--------------------------------------------------
+
+      const std::vector<double>* best_row =
+          nullptr;
+
+      for (const auto& row : robot_config_table_) {
+
+          int iz =
+              static_cast<int>(
+                  std::round(row[1])
+              );
+
+          int iroll =
+              static_cast<int>(
+                  std::round(row[2])
+              );
+
+          if (
+              iz == closest_iz
+              &&
+              iroll == closest_iroll
+          ) {
+
+              best_row = &row;
+              break;
+          }
+      }
+
+      //--------------------------------------------------
+      // Safety check
+      //--------------------------------------------------
+
+      if (best_row == nullptr) {
+
+          RCLCPP_ERROR(
+              this->get_logger(),
+              "Could not find configuration for "
+              "iz=%d, iroll=%d",
+              closest_iz,
+              closest_iroll
+          );
+
+          return q;
+      }
+
+      //--------------------------------------------------
+      // q0 ... q5
+      //--------------------------------------------------
+
+      for (int i = 0; i < 6; ++i) {
+
+          q[i] = (*best_row)[9 + i];
+      }
+
+      //--------------------------------------------------
+      // Debug
+      //--------------------------------------------------
+
+      RCLCPP_DEBUG(
+          this->get_logger(),
+          "Lookup: "
+          "requested (Z=%.6f, Roll=%.6f) -> "
+          "(iz=%d, iroll=%d), "
+          "table (Z=%.6f, Roll=%.6f)",
+          slider_z,
+          cylinder_rot,
+          closest_iz,
+          closest_iroll,
+          (*best_row)[4],
+          (*best_row)[5]
+      );
+
+      return q;
+  }
 
   std::vector<double> computeRobotConfig(
     double slider_z,
@@ -1442,9 +1612,70 @@ private:
     return true;
   }
 
+  bool loadRobotConfigTable(
+      const std::string& filename)
+  {
+      std::ifstream file(filename);
+
+      if (!file.is_open()) {
+
+          RCLCPP_ERROR(
+              this->get_logger(),
+              "Could not open robot configuration table: %s",
+              filename.c_str()
+          );
+
+          return false;
+      }
+
+      robot_config_table_.clear();
+
+      std::string line;
+
+      while (std::getline(file, line)) {
+
+          // Skip comments and empty lines
+          if (line.empty() || line[0] == '#') {
+              continue;
+          }
+
+          std::istringstream iss(line);
+
+          std::vector<double> row;
+          double value;
+
+          while (iss >> value) {
+              row.push_back(value);
+          }
+
+          if (row.size() < 15) {
+
+              RCLCPP_WARN(
+                  this->get_logger(),
+                  "Skipping malformed table row with %zu columns",
+                  row.size()
+              );
+
+              continue;
+          }
+
+          robot_config_table_.push_back(row);
+      }
+
+      file.close();
+
+      RCLCPP_INFO(
+          this->get_logger(),
+          "Loaded %zu robot configurations",
+          robot_config_table_.size()
+      );
+
+      return !robot_config_table_.empty();
+  }
+
   // Members
   std::string robot_type_ = "ur5e"; //"ur5e" or "ur3e"
-  std::string tool_placement_ = "Lshape"; //"straight" or "Lshape"
+  std::string tool_placement_ = "straight"; //"straight" or "Lshape"
   moveit::core::RobotModelPtr robot_model_;
   moveit::core::RobotStatePtr robot_state_;
   planning_scene::PlanningScenePtr planning_scene_;
@@ -1467,6 +1698,8 @@ private:
     {"tool0", "ee_link"} //Change "tool0" to "tcp_link"
   };
   rclcpp::Client<custom_interfaces::srv::CollisionCost>::SharedPtr col_cost_client_;
+
+  std::vector<std::vector<double>> robot_config_table_;
 
   tf2_ros::Buffer tf_buffer_;
   tf2_ros::TransformListener tf_listener_;
