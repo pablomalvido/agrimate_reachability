@@ -116,6 +116,8 @@
     <origin xyz="0 0 0.2"/>
    </joint>
 
+   <link name="slider_horizontal_link"/>
+
    <link name="slider_link"/>
 
    <link name="mount_cylinder">
@@ -138,11 +140,24 @@
     </collision>
   </link>
 
-  <joint name="platform_to_slider" type="prismatic">
+  <joint name="horizontal_slider" type="prismatic">
     <parent link="platform_link"/>
-    <child link="slider_link"/>
+    <child link="slider_horizontal_link"/>
 
     <origin xyz="0 0 0.6" rpy="0 0 0"/>
+
+    <!-- Move up/down -->
+    <axis xyz="0 1 0"/>
+
+    <!-- <limit lower="-0.1" upper="0.3" effort="100" velocity="0.5"/> -->
+    <limit lower="0.0" upper="0.3" effort="100" velocity="0.5"/>
+  </joint>
+
+  <joint name="platform_to_slider" type="prismatic">
+    <parent link="slider_horizontal_link"/>
+    <child link="slider_link"/>
+
+    <origin xyz="0 0 0" rpy="0 0 0"/>
 
     <!-- Move up/down -->
     <axis xyz="0 0 1"/>
@@ -150,6 +165,17 @@
     <!-- <limit lower="-0.1" upper="0.3" effort="100" velocity="0.5"/> -->
     <limit lower="-0.1" upper="0.6" effort="100" velocity="0.5"/>
   </joint>
+
+  <!-- <joint name="platform_to_slider" type="prismatic">
+    <parent link="platform_link"/>
+    <child link="slider_link"/>
+
+    <origin xyz="0 0 0.6" rpy="0 0 0"/>
+
+    <axis xyz="0 0 1"/>
+
+    <limit lower="-0.1" upper="0.6" effort="100" velocity="0.5"/>
+  </joint> -->
 
   <joint name="platform_to_cylinder" type="revolute">
     <parent link="slider_link"/>

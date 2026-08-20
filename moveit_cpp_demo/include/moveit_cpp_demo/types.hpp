@@ -37,6 +37,7 @@ struct ReachabilityConfig
     std::string pose_prefix = "sample_pose_";
     bool enable_planning = true;
     double planning_probability = 0.2;
+    double y_offset_obstacle = 0.0; // Offset for the obstacle in the Y direction
     std::string obstacle = "";
 };
 

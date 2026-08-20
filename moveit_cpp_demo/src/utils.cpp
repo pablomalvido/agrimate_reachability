@@ -13,7 +13,7 @@ namespace fs = std::filesystem;
 const std::string package_path =
     ament_index_cpp::get_package_share_directory("moveit_cpp_demo");
 
-const fs::path data_dir = DATA_DIR;
+const fs::path data_dir = fs::path(DATA_DIR) / "scores";
 
 std::string saveHistoryToFile(
     const std::string &title,
@@ -50,7 +50,7 @@ std::string saveHistoryToFile(
 
     const int new_index = highest_used_index + 1;
 
-    const fs::path filepath = data_dir / "scores" / (title + "_" + std::to_string(new_index) + ".txt");
+    const fs::path filepath = data_dir / (title + "_" + std::to_string(new_index) + ".txt");
 
     std::ofstream file(filepath);
 

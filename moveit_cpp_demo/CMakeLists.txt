@@ -32,13 +32,21 @@ endif()
 
 add_executable(move_robot src/move_robot.cpp)
 add_executable(ik_checker src/reachability_ik_checker_v5.cpp src/simplified_bayesian_optimizer.cpp src/utils.cpp)
+add_executable(ik_checker_3d src/reachability_ik_checker_3d.cpp src/simplified_bayesian_optimizer.cpp src/utils.cpp)
 add_executable(ik_test src/ik_test.cpp)
 add_executable(collisions_server src/collisions_server.cpp)
 add_executable(ik_collisions src/ik_collisions_v2.cpp)
 add_executable(fake_state_pub src/fake_joint_publisher.cpp)
 add_executable(init_config src/initial_config_optimizer.cpp)
+add_executable(init_config3d src/initial_config_optimizer_3d.cpp)
+
 
 target_include_directories(ik_checker PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+
+target_include_directories(ik_checker_3d PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
 )
@@ -48,7 +56,16 @@ target_include_directories(init_config PUBLIC
   $<INSTALL_INTERFACE:include>
 )
 
+target_include_directories(init_config3d PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+
 target_compile_definitions(ik_checker PRIVATE
+  DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data"
+)
+
+target_compile_definitions(ik_checker_3d PRIVATE
   DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data"
 )
 
@@ -70,7 +87,31 @@ ament_target_dependencies(ik_checker
   custom_interfaces
 )
 
+ament_target_dependencies(ik_checker_3d
+  rclcpp
+  moveit_core
+  moveit_ros_planning
+  moveit_ros_planning_interface
+  geometry_msgs
+  tf2_ros
+  tf2_geometry_msgs
+  ament_index_cpp
+  custom_interfaces
+)
+
 ament_target_dependencies(init_config 
+  rclcpp
+  moveit_core
+  moveit_ros_planning
+  moveit_ros_planning_interface
+  geometry_msgs
+  tf2_ros
+  tf2_geometry_msgs
+  ament_index_cpp
+  custom_interfaces
+)
+
+ament_target_dependencies(init_config3d 
   rclcpp
   moveit_core
   moveit_ros_planning
@@ -111,10 +152,11 @@ ament_target_dependencies(fake_state_pub
 )
 
 target_link_libraries(ik_checker yaml-cpp)
-
+target_link_libraries(ik_checker_3d yaml-cpp)
 target_link_libraries(init_config yaml-cpp)
+target_link_libraries(init_config3d yaml-cpp)
 
-install(TARGETS move_robot ik_checker init_config ik_test collisions_server ik_collisions fake_state_pub
+install(TARGETS move_robot ik_checker ik_checker_3d init_config init_config3d ik_test collisions_server ik_collisions fake_state_pub
   DESTINATION lib/${PROJECT_NAME}
 )
 

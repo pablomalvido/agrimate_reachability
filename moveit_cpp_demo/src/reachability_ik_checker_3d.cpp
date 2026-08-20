@@ -97,7 +97,7 @@ public:
 
     const std::string table_path =
         "/home/rosdev/ros2_ws/src/moveit_cpp_demo/"
-        "data/initial_config_optimization/final_configuration_table_upsidedown_straight.txt";
+        "data/initial_config_optimization/final_configuration_3d_table_upsidedown_straight.txt";
 
     if (!loadRobotConfigTable(table_path)) {
         RCLCPP_ERROR(
@@ -628,11 +628,13 @@ std::vector<double> computeRobotConfigFromTable(
     auto msg = sensor_msgs::msg::JointState();
     msg.name = {
         "world_to_vineyard",
+        "horizontal_slider",
         "platform_to_slider",
         "platform_to_cylinder"
     };
 
     msg.position = {
+        -0.6, // fixed
         p_y,
         p_z,
         p_roll
@@ -642,7 +644,8 @@ std::vector<double> computeRobotConfigFromTable(
 
     robot_state_->setVariablePosition("platform_to_slider", p_z);
     robot_state_->setVariablePosition("platform_to_cylinder", p_roll);
-    robot_state_->setVariablePosition("world_to_vineyard", p_y);
+    robot_state_->setVariablePosition("world_to_vineyard", -0.6);
+    robot_state_->setVariablePosition("horizontal_slider", p_y);
 
     robot_state_->update();
   }

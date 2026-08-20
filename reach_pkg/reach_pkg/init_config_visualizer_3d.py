@@ -13,7 +13,7 @@ import numpy as np
 
 TABLE_PATH = (
     '/home/rosdev/ros2_ws/src/moveit_cpp_demo/'
-    'data/initial_config_optimization/final_configuration_table_upsidedown_straight.txt'
+    'data/initial_config_optimization/final_configuration_3d_table_upsidedown_straight.txt'
 )
 
 # ----------------------------------------------------------
@@ -398,6 +398,7 @@ class PassiveJointPublisher(Node):
             'platform_to_slider',
             'platform_to_cylinder',
             'world_to_vineyard',
+            'horizontal_slider',
 
             # UR5e joints
             'shoulder_pan_joint',
@@ -413,6 +414,7 @@ class PassiveJointPublisher(Node):
             # Passive joints
             z,
             roll,
+            -0.6,
             y,
 
             # UR5e joints

@@ -37,6 +37,7 @@ setup(
             'collisions_cost_server = reach_pkg.collisions_cost_server:main',
             'generic_br = reach_pkg.generic_broadcaster:main',
             'init_config_visualizer = reach_pkg.init_config_visualizer:main',
+            'init_config_visualizer_3d = reach_pkg.init_config_visualizer_3d:main',
         ],
     },
 )

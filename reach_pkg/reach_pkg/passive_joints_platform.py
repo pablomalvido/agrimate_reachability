@@ -14,16 +14,18 @@ class PassiveJointPublisher(Node):
             self.command_callback,
             10)
 
+        
         self.position_slider = 0.0  # <-- change this dynamically if you want
         self.position_cylinder = 0.0  # <-- change this dynamically if you want
         self.position_vineyard = -0.7  # <-- change this dynamically if you want
+        self.position_slider_horizontal = 0.0  # <-- change this dynamically if you want
         self.timer = self.create_timer(0.1, self.publish_joint)
 
     def publish_joint(self):
         msg = JointState()
         msg.header.stamp = self.get_clock().now().to_msg()
-        msg.name = ['platform_to_slider', 'platform_to_cylinder', 'world_to_vineyard']
-        msg.position = [self.position_slider, self.position_cylinder, self.position_vineyard]
+        msg.name = ['platform_to_slider', 'platform_to_cylinder', 'world_to_vineyard', 'horizontal_slider']
+        msg.position = [self.position_slider, self.position_cylinder, self.position_vineyard, self.position_slider_horizontal]
         self.pub.publish(msg)
 
     def command_callback(self, msg):
@@ -38,11 +40,15 @@ class PassiveJointPublisher(Node):
             elif name == "world_to_vineyard":
                 self.position_vineyard = pos
 
+            elif name == "horizontal_slider":
+                self.position_slider_horizontal = pos
+
         self.publish_joint() #Fast update
 
         self.get_logger().info(f"Received slider={self.position_slider:.3f}, "
             f"cylinder={self.position_cylinder:.3f}, "
-            f"vineyard={self.position_vineyard:.3f}")
+            f"vineyard={self.position_vineyard:.3f}, "
+            f"horizontal_slider={self.position_slider_horizontal:.3f}")
 
 
 def main(args=None):

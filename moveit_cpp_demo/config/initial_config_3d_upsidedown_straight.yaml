@@ -1,0 +1,95 @@
+# ============================================================
+# Initial configuration table generation
+# ============================================================
+
+# ------------------------------------------------------------
+# Joint sampling / IK constraints
+# Order:
+# 0 = shoulder_pan_joint
+# 1 = shoulder_lift_joint
+# 2 = elbow_joint
+# 3 = wrist_1_joint
+# 4 = wrist_2_joint
+# 5 = wrist_3_joint
+# ------------------------------------------------------------
+
+joint_limits:
+  lower:
+    - 0.0
+    - -3.8
+    - -2.2
+    - -2.5
+    - 1.57
+    - 0.0
+
+  upper:
+    - 0.0
+    - 0.85
+    - 1.8
+    - -1.0
+    - 1.57
+    - 0.0
+
+
+# ------------------------------------------------------------
+# Robot placement grid
+# ------------------------------------------------------------
+
+placement:
+  y:
+    min: 0.0
+    max: 0.3
+    n: 6
+
+  z:
+    min: 0.4
+    max: 0.6
+    n: 5
+
+  roll:
+    min: 1.2
+    max: 4.7
+    n: 12
+
+
+# ------------------------------------------------------------
+# Cartesian workspace where random EE positions are sampled
+# ------------------------------------------------------------
+
+cartesian_box:
+  x:
+    min: -0.15 #0.15 is centered
+    max: 0.45
+
+  y:
+    min: -0.75
+    max: -0.25
+
+  z:
+    min: 0.15
+    max: 1.5
+
+
+# ------------------------------------------------------------
+# Candidate generation
+# ------------------------------------------------------------
+
+# Number of random Cartesian positions/IK attempts
+# generated for every robot placement.
+n_random_candidates: 500
+
+# Number of best candidates retained at every placement.
+k: 10
+
+# Number of representative target points used
+# for evaluating motion planning.
+number_of_representative_targets: 8
+
+
+# ------------------------------------------------------------
+# Output
+# ------------------------------------------------------------
+
+output:
+  raw_table_file: "/home/rosdev/ros2_ws/src/moveit_cpp_demo/data/initial_config_optimization/raw_configuration_3d_table_upsidedown_straight.txt"
+  final_table_file: "/home/rosdev/ros2_ws/src/moveit_cpp_demo/data/initial_config_optimization/final_configuration_3d_table_upsidedown_straight.txt"
