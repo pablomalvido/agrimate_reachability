@@ -149,8 +149,8 @@ public:
     double y_min;
     double y_max; 
     if (robot_type_ == "ur5e" or robot_type_ == "ur5"){
-      y_min = -1.0; //m
-      y_max = -0.5; //m
+      y_min = 0.0; //m
+      y_max = 0.3; //m
     }
     else if (robot_type_ == "ur3e" or robot_type_ == "ur3"){
       y_min = -0.7; //m

@@ -53,7 +53,7 @@ levels = [
 filename = (
     "/home/rosdev/ros2_ws/src/"
     "moveit_cpp_demo/data/scores/"
-    "score_ur5e_straight_2.txt"
+    "score_ur5e_Lshape_5.txt"
 )
 
 with open(filename, "r") as f:

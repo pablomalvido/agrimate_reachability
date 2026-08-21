@@ -24,7 +24,7 @@ TABLE_PATH = (
 # 0, 1, 2, ... = visualize only that cluster
 # ----------------------------------------------------------
 
-CLUSTER_TO_VISUALIZE = 99
+CLUSTER_TO_VISUALIZE = 0
 
 
 class PassiveJointPublisher(Node):
@@ -414,7 +414,7 @@ class PassiveJointPublisher(Node):
             # Passive joints
             z,
             roll,
-            -0.6,
+            -0.65,
             y,
 
             # UR5e joints

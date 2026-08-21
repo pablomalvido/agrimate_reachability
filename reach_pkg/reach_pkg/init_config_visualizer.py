@@ -24,7 +24,7 @@ TABLE_PATH = (
 # 0, 1, 2, ... = visualize only that cluster
 # ----------------------------------------------------------
 
-CLUSTER_TO_VISUALIZE = 99
+CLUSTER_TO_VISUALIZE = 0
 
 
 class PassiveJointPublisher(Node):
@@ -398,6 +398,7 @@ class PassiveJointPublisher(Node):
             'platform_to_slider',
             'platform_to_cylinder',
             'world_to_vineyard',
+            'horizontal_slider',
 
             # UR5e joints
             'shoulder_pan_joint',
@@ -414,6 +415,7 @@ class PassiveJointPublisher(Node):
             z,
             roll,
             y,
+            0.0, # <-- horizontal slider is fixed at 0.0
 
             # UR5e joints
             q[0],
